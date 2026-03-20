@@ -551,3 +551,48 @@ main { padding: 0 16px; }
 }
 @keyframes toastIn  { from { opacity:0; transform: translateX(-50%) translateY(10px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
 @keyframes toastOut { from { opacity:1; } to { opacity:0; } }
+
+/* ============================================================
+   GROUPES NOM COURT (variantes)
+   ============================================================ */
+.nc-group {
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.nc-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-light);
+  padding: 7px 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.product-card.is-variant {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+  background: var(--surface);
+}
+.product-card.is-variant:last-child {
+  border-bottom: none;
+}
+.product-card.is-variant.has-qty {
+  background: var(--accent-light);
+  border-bottom-color: #C6E8D5;
+}
+
+.product-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
