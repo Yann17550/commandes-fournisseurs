@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Commandes Fournisseurs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo">🧾</div>
+      <div>
+        <h1>Commandes</h1>
+        <span class="week-label" id="weekLabel">Chargement...</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn" id="refreshBtn" title="Recharger les produits">↻</button>
+      <button class="icon-btn" id="summaryBtn" title="Récapitulatif" style="display:none">📋</button>
+    </div>
+  </header>
+
+  <!-- Search + Filter bar -->
+  <div class="search-bar">
+    <input type="search" id="searchInput" placeholder="Rechercher un produit..." autocomplete="off">
+  </div>
+
+  <!-- Supplier tabs -->
+  <div class="supplier-tabs" id="supplierTabs"></div>
+
+  <!-- Main content -->
+  <main id="mainContent">
+    <div class="loading-state" id="loadingState">
+      <div class="spinner"></div>
+      <p>Chargement des produits...</p>
+    </div>
+    <div id="productList" style="display:none"></div>
+  </main>
+
+  <!-- Bottom bar: total + validate -->
+  <div class="bottom-bar" id="bottomBar" style="display:none">
+    <div class="total-block">
+      <span class="total-label">Total HT</span>
+      <span class="total-amount" id="totalAmount">0,00 €</span>
+    </div>
+    <button class="validate-btn" id="validateBtn">Voir la commande →</button>
+  </div>
+</div>
+
+<!-- Summary Modal -->
+<div class="modal-overlay" id="summaryModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Récapitulatif de commande</h2>
+      <button class="icon-btn" id="closeModal">✕</button>
+    </div>
+    <div class="modal-body" id="summaryContent"></div>
+    <div class="modal-footer">
+      <button class="copy-btn" id="copyBtn">📋 Copier le texte</button>
+      <button class="reset-btn" id="resetBtn">🗑 Vider la commande</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
