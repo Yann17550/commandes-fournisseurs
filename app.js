@@ -100,6 +100,31 @@ function parseTSV(tsv) {
   });
 }
 
+// Nettoie la désignation : retire les suffixes légaux/logistiques bruyants
+// pour garder la partie "lisible" du nom produit
+function cleanDesignation(designation, nom_court) {
+  let s = designation || '';
+
+  // Retire les mentions légales et commerciales en fin de chaîne
+  const toStrip = [
+    /\s*-\s*DROIT ALCOOL.*/i,
+    /\s*-\s*droit sur alcool.*/i,
+    /\s*\+\s*TAXE SECURITE SOCIALE.*/i,
+    /\s*-\s*TAXE.*/i,
+    /\s*\(pack x\d+\)/i,
+  ];
+  toStrip.forEach(re => { s = s.replace(re, ''); });
+
+  // Capitalise proprement (tout en minuscule sauf 1ère lettre des mots importants)
+  s = s.trim();
+  // Garde la casse d'origine mais retire les excès de majuscules (tout caps → Title case)
+  if (s === s.toUpperCase()) {
+    s = s.toLowerCase().replace(/\b(\w)/g, c => c.toUpperCase());
+  }
+
+  return s.trim();
+}
+
 function parseProduits(tsv) {
   const rows = parseTSV(tsv);
   const C = CONFIG.COLS;
@@ -109,20 +134,25 @@ function parseProduits(tsv) {
       return !actif || actif.toUpperCase() === 'TRUE';
     })
     .filter(r => r[C.nom_court] && r[C.fournisseur])
-    .map(r => ({
-      fournisseur:  r[C.fournisseur]  || '',
-      reference:    r[C.reference]    || '',
-      designation:  r[C.designation]  || '',
-      tva:          parseNum(r[C.tva]),
-      prix_ht:      parseNum(r[C.prix_ht]),
-      droit_alcool: parseNum(r[C.droit_alcool]),
-      taxe_secu:    parseNum(r[C.taxe_secu]),
-      nom_court:    r[C.nom_court]    || '',
-      categorie:    r[C.categorie]    || 'Divers',
-      colissage:    parseNum(r[C.colissage]) || 1,
-      prix_colis:   parseNum(r[C.prix_colis]),
-      actif:        true,
-    }));
+    .map(r => {
+      const nom_court   = r[C.nom_court]   || '';
+      const designation = r[C.designation] || '';
+      return {
+        fournisseur:  r[C.fournisseur]  || '',
+        reference:    r[C.reference]    || '',
+        designation:  designation,
+        label:        cleanDesignation(designation, nom_court), // ← affiché dans la carte
+        tva:          parseNum(r[C.tva]),
+        prix_ht:      parseNum(r[C.prix_ht]),
+        droit_alcool: parseNum(r[C.droit_alcool]),
+        taxe_secu:    parseNum(r[C.taxe_secu]),
+        nom_court:    nom_court,
+        categorie:    r[C.categorie]    || 'Divers',
+        colissage:    parseNum(r[C.colissage]) || 1,
+        prix_colis:   parseNum(r[C.prix_colis]),
+        actif:        true,
+      };
+    });
 }
 
 function parseFournisseurs(tsv) {
@@ -206,26 +236,41 @@ function renderProducts() {
     return;
   }
 
-  // Group by categorie (and by fournisseur if TOUS)
-  const groups = {};
+  // Niveau 1 : Catégorie (+ fournisseur si onglet TOUS)
+  // Niveau 2 : Nom court (groupe de variantes)
+  // Niveau 3 : Produit individuel avec sa désignation complète
+  const catGroups = {};
   visible.forEach(p => {
-    const groupKey = state.activeTab === 'TOUS'
+    const catKey = state.activeTab === 'TOUS'
       ? `${p.fournisseur} — ${p.categorie}`
       : p.categorie;
-    if (!groups[groupKey]) groups[groupKey] = [];
-    groups[groupKey].push(p);
+    if (!catGroups[catKey]) catGroups[catKey] = {};
+    const ncKey = p.nom_court;
+    if (!catGroups[catKey][ncKey]) catGroups[catKey][ncKey] = [];
+    catGroups[catKey][ncKey].push(p);
   });
 
-  productList.innerHTML = Object.entries(groups)
+  productList.innerHTML = Object.entries(catGroups)
     .sort(([a], [b]) => a.localeCompare(b, 'fr'))
-    .map(([cat, prods]) => `
+    .map(([cat, nomCourts]) => `
       <div class="cat-group">
         <div class="cat-header">${cat}</div>
-        ${prods.map(p => renderCard(p)).join('')}
+        ${Object.entries(nomCourts)
+          .sort(([a], [b]) => a.localeCompare(b, 'fr'))
+          .map(([nomCourt, prods]) => {
+            if (prods.length === 1) return renderCard(prods[0], false);
+            return `<div class="nc-group">
+              <div class="nc-header">${nomCourt}</div>
+              ${prods.map(p => renderCard(p, true)).join('')}
+            </div>`;
+          }).join('')}
       </div>
     `).join('');
 
-  // Bind stepper events
+  bindSteppers();
+}
+
+function bindSteppers() {
   productList.querySelectorAll('.qty-btn').forEach(btn => {
     btn.addEventListener('click', onQtyBtn);
   });
@@ -235,15 +280,19 @@ function renderProducts() {
   });
 }
 
-function renderCard(p) {
+function renderCard(p, isVariant) {
   const key = productKey(p);
   const qty = state.quantities[key] || 0;
   const total = qty * p.prix_ht;
   const hasAlcool = p.droit_alcool > 0 || p.taxe_secu > 0;
+  // En mode variante, affiche la désignation nettoyée ; sinon nom_court + désignation
+  const mainLabel  = isVariant ? p.label : p.nom_court;
+  const subLabel   = isVariant ? '' : (p.label !== p.nom_court ? p.label : '');
 
-  return `<div class="product-card ${qty > 0 ? 'has-qty' : ''}" data-key="${key}">
+  return `<div class="product-card ${qty > 0 ? 'has-qty' : ''} ${isVariant ? 'is-variant' : ''}" data-key="${key}">
     <div class="product-info">
-      <div class="product-nom">${p.nom_court}</div>
+      <div class="product-nom">${mainLabel}</div>
+      ${subLabel ? `<div class="product-sub">${subLabel}</div>` : ''}
       <div class="product-meta">
         <span class="product-ref">${p.reference}</span>
         <span class="product-prix">${fmtPrice(p.prix_ht)}/u</span>
@@ -278,19 +327,20 @@ function onQtyInput(e) {
 
 function setQty(key, qty) {
   state.quantities[key] = qty;
-  // Update just the card without full re-render
-  const card = productList.querySelector(`[data-key="${key}"]`);
+  const card = productList.querySelector(`.product-card[data-key="${key}"]`);
   if (card) {
     const p = state.produits.find(p => productKey(p) === key);
-    if (p) card.outerHTML = renderCard(p);
-    // Re-bind new card
-    const newCard = productList.querySelector(`[data-key="${key}"]`);
-    if (newCard) {
-      newCard.querySelectorAll('.qty-btn').forEach(b => b.addEventListener('click', onQtyBtn));
-      newCard.querySelectorAll('.qty-input').forEach(i => {
-        i.addEventListener('change', onQtyInput);
-        i.addEventListener('focus', e => e.target.select());
-      });
+    if (p) {
+      const isVariant = card.classList.contains('is-variant');
+      card.outerHTML = renderCard(p, isVariant);
+      const newCard = productList.querySelector(`.product-card[data-key="${key}"]`);
+      if (newCard) {
+        newCard.querySelectorAll('.qty-btn').forEach(b => b.addEventListener('click', onQtyBtn));
+        newCard.querySelectorAll('.qty-input').forEach(i => {
+          i.addEventListener('change', onQtyInput);
+          i.addEventListener('focus', e => e.target.select());
+        });
+      }
     }
   }
   updateTotal();
