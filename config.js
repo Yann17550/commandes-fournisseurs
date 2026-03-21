@@ -29,4 +29,17 @@ const CONFIG = {
     prix_colis:   'prix_colis',
     actif:        'actif',
   },
+
+  // Colonnes feuille fournisseurs
+  COLS_F: {
+    nom:               'nom',
+    telephone:         'telephone',
+    contact:           'contact',
+    jour_saison:       'jour_appel saison',
+    jour_hors_saison:  'jour_appel hors saison',
+    notes:             'notes',
+  },
+
+  // Saison : mois où on est "en saison" (1=janvier … 12=décembre)
+  MOIS_SAISON: [4, 5, 6, 7, 8, 9, 10],
 };
