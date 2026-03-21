@@ -242,7 +242,7 @@ function renderAccordion() {
 
     const appel = getJourAppel(sup);
     const appelHtml = appel
-      ? `<span class="acc-appel${appel.today ? ' acc-appel--today' : ''}">${appel.today ? '📞 Aujourd'hui' : escHtml(appel.label)}</span>`
+      ? `<span class="acc-appel${appel.today ? ' acc-appel--today' : ''}">${appel.today ? '📞 Aujourd\'hui' : escHtml(appel.label)}</span>`
       : '';
 
     html += `<div class="accordion-block${isOpen ? ' is-open' : ''}" data-sup="${escHtml(sup)}">
