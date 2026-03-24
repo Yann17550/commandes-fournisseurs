@@ -29,6 +29,15 @@
     </div>
   </header>
 
+  <!-- NOUVEAU : Sélecteur établissement -->
+  <div class="etab-selector">
+    <label for="etabSelect">Établissement :</label>
+    <select id="etabSelect">
+      <option value="dolus">Dolus</option>
+      <option value="vesuvio">Vesuvio</option>
+    </select>
+  </div>
+
   <div class="search-bar">
     <input type="search" id="searchInput" placeholder="Rechercher un produit, une référence…" autocomplete="off" autocorrect="off" spellcheck="false">
   </div>
@@ -59,7 +68,7 @@
     </div>
     <div class="modal-body" id="summaryContent"></div>
     <div class="modal-footer">
-      <button class="copy-btn" id="copyBtn">📋 Copier &amp; mémoriser</button>
+      <button class="copy-btn" id="copyBtn">📋 Copier & mémoriser</button>
       <button class="reset-btn" id="resetBtn">🗑 Vider</button>
     </div>
   </div>
