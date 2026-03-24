@@ -20,6 +20,77 @@ function recordOrder(quantities) {
   saveScores(scores);
 }
 
+// ---- Persistance commande (Google Apps Script) -----------
+
+let saveTimer = null;
+
+async function saveCommandeRemote(quantities) {
+  const url = CONFIG.APPS_SCRIPT_URL;
+  if (!url) return; // pas configuré
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'write', ...quantities }),
+    });
+  } catch (e) {
+    console.warn('Sauvegarde distante échouée :', e);
+  }
+}
+
+// Sauvegarde avec debounce 1,5s pour ne pas spammer l'API
+function scheduleSave(quantities) {
+  const url = CONFIG.APPS_SCRIPT_URL;
+  if (!url) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const toSave = Object.fromEntries(
+      Object.entries(quantities).filter(([, v]) => v > 0)
+    );
+    fetch(url + '?action=write', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(toSave),
+    }).catch(() => {});
+    showSaveStatus('💾 Sauvegardé');
+  }, 1500);
+  showSaveStatus('…');
+}
+
+async function loadCommandeRemote() {
+  const url = CONFIG.APPS_SCRIPT_URL;
+  if (!url) return {};
+  try {
+    const res = await fetch(url + '?action=read');
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data || {};
+  } catch (e) {
+    console.warn('Chargement commande distante échoué :', e);
+    return {};
+  }
+}
+
+async function clearCommandeRemote() {
+  const url = CONFIG.APPS_SCRIPT_URL;
+  if (!url) return;
+  try {
+    await fetch(url + '?action=clear', { method: 'POST', mode: 'no-cors' });
+  } catch {}
+}
+
+function showSaveStatus(msg) {
+  let el = document.getElementById('saveStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  if (msg === '💾 Sauvegardé') {
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+  }
+}
+
 // ---- State -----------------------------------------------
 let state = {
   produits: [], fournisseurs: {}, quantities: {},
@@ -171,6 +242,14 @@ async function loadData() {
     state.loaded = true;
     const sups = getSuppliers();
     if (sups.length) state.openSupplier = sups[0];
+
+    // Charge la commande en cours depuis Google Sheets
+    const saved = await loadCommandeRemote();
+    if (Object.keys(saved).length > 0) {
+      state.quantities = saved;
+      showToast('📂 Commande en cours restaurée');
+    }
+
     render();
   } catch(err) {
     console.error(err);
@@ -383,6 +462,7 @@ function setQty(key, qty) {
   }
   updateAccordionBadge(key);
   updateTotal();
+  scheduleSave(state.quantities);
 }
 
 function updateAccordionBadge(changedKey) {
@@ -468,6 +548,7 @@ $('copyBtn').addEventListener('click', () => {
 $('resetBtn').addEventListener('click', () => {
   if (!confirm('Vider toute la commande en cours ?')) return;
   state.quantities = {};
+  clearCommandeRemote();
   closeSummary();
   renderAccordion();
   updateTotal();
