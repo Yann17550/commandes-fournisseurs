@@ -231,12 +231,59 @@ main { padding: 0 14px; }
   line-height: 1.5;
 }
 
-/* Sélecteur établissement */
-.etab-selector {
-  padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
-}
-.etab-selector label { font-size: 12px; color: var(--text-muted); margin-right: 8px; }
-.etab-selector select {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  font-family: var(--font); font-size: 14px; padding: 4px 8px; color: var(--text);
-}
+/* ============================================================
+   ECRAN CHOIX ETABLISSEMENT
+   ============================================================ */
+.screen { display:flex; flex-direction:column; min-height:100vh; }
+.etab-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:2rem; gap:1rem; background:var(--bg); }
+.etab-logo { font-size:48px; margin-bottom:0.5rem; }
+.etab-title { font-size:24px; font-weight:600; color:var(--text); }
+.etab-sub { font-size:15px; color:var(--text-muted); margin-bottom:0.5rem; }
+.etab-cards { display:flex; flex-direction:column; gap:12px; width:100%; max-width:320px; }
+.etab-card { display:flex; align-items:center; gap:16px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-family:var(--font); font-size:16px; font-weight:500; color:var(--text); transition:border-color 0.15s,background 0.15s; }
+.etab-card:active { background:var(--accent-light); border-color:var(--accent); }
+.etab-card-icon { font-size:24px; }
+.etab-card-label { flex:1; text-align:left; }
+.etab-switch-link { background:none; border:none; color:var(--text-muted); font-family:var(--font); font-size:13px; cursor:pointer; text-decoration:underline; margin-top:0.5rem; }
+
+/* Pill etablissement dans le header */
+.etab-pill { background:var(--accent-light); border:1px solid var(--accent); color:var(--accent-text); border-radius:99px; padding:4px 12px; font-family:var(--font); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+
+/* Statut sauvegarde */
+.save-status { font-size:11px; color:var(--text-muted); font-family:var(--font-mono); opacity:0; transition:opacity 0.3s; white-space:nowrap; }
+
+/* ============================================================
+   PRODUIT : NOM + BOUTON EDITION
+   ============================================================ */
+.product-nom-row { display:flex; align-items:center; gap:6px; }
+.product-nom { flex:1; font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.edit-btn { background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px; opacity:0.4; flex-shrink:0; }
+.edit-btn:active { opacity:1; }
+.has-override .product-ref { color:var(--accent-text); font-weight:600; }
+.ref-override { color:var(--accent-text) !important; font-weight:600; }
+
+/* Colissage info */
+.colissage-info { font-size:11px; color:var(--text-light); font-style:italic; }
+
+/* Rappel derniere commande */
+.last-order { font-size:11px; color:var(--text-light); margin-top:3px; font-style:italic; }
+
+/* ============================================================
+   FAB AJOUT PRODUIT
+   ============================================================ */
+.fab-row { display:flex; justify-content:flex-end; padding:6px 0 2px; }
+.fab-add { background:none; border:1px dashed var(--border-mid); border-radius:var(--radius-sm); color:var(--text-muted); font-family:var(--font); font-size:12px; padding:5px 14px; cursor:pointer; }
+.fab-add:active { background:var(--accent-light); color:var(--accent-text); border-color:var(--accent); }
+
+/* ============================================================
+   MODALS EDITION / AJOUT
+   ============================================================ */
+.modal--small .modal-body { max-height:65vh; overflow-y:auto; }
+.edit-label { display:block; font-size:12px; font-weight:500; color:var(--text-muted); margin:14px 0 4px; text-transform:uppercase; letter-spacing:0.05em; }
+.edit-input { width:100%; height:40px; padding:0 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); font-family:var(--font); font-size:14px; color:var(--text); outline:none; }
+.edit-input:focus { border-color:var(--accent); }
+select.edit-input { height:40px; cursor:pointer; }
+.edit-note { font-size:12px; color:var(--text-light); margin-top:16px; line-height:1.5; font-style:italic; }
+
+/* Ligne recap avec unites */
+.summary-line-units { font-size:11px; color:var(--text-light); flex-shrink:0; }
