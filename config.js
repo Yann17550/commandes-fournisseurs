@@ -1,43 +1,134 @@
-// ============================================================
-//  CONFIG — à modifier selon vos besoins
-// ============================================================
-const CONFIG = {
-  SHEETS: {
-    produits:     'https://docs.google.com/spreadsheets/d/e/2PACX-1vS5BG2CIzft1vqqSf01koQxj9rvGsyfckUmV-BH9HE5lAwprxS8V_uPQyKdG7DJYEiazvNs5NQRmNZa/pub?gid=0&single=true&output=tsv',
-    fournisseurs: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS5BG2CIzft1vqqSf01koQxj9rvGsyfckUmV-BH9HE5lAwprxS8V_uPQyKdG7DJYEiazvNs5NQRmNZa/pub?gid=1147908682&single=true&output=tsv',
-  },
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Commandes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-  // Colonnes feuille produits
-  COLS: {
-    fournisseur:  'Fournisseur',
-    reference:    'Référence',
-    designation:  'Désignation Produit',
-    tva:          'TVA (%)',
-    prix_ht:      'P.U. HT',
-    droit_alcool: 'DROIT ALCOOL',
-    taxe_secu:    'TAXE SECURITE SOCIALE',
-    nom_court:    'Nom Court',
-    categorie:    'Catégorie',
-    colissage:    'colissage',
-    prix_colis:   'prix_colis',
-    actif:        'actif',
-  },
+<div id="screenEtab" class="screen">
+  <div class="etab-screen">
+    <div class="etab-logo">🧾</div>
+    <h1 class="etab-title">Commandes</h1>
+    <p class="etab-sub">Quel etablissement ?</p>
+    <div class="etab-cards" id="etabCards"></div>
+    <button class="etab-switch-link" id="switchEtabBtn" style="display:none">Changer d etablissement</button>
+  </div>
+</div>
 
-  // Colonnes feuille fournisseurs
-  COLS_F: {
-    nom:               'nom',
-    telephone:         'telephone',
-    contact:           'contact',
-    jour_saison:       'jour_appel saison',
-    jour_hors_saison:  'jour_appel hors saison',
-    notes:             'notes',
-  },
+<div id="screenApp" class="screen" style="display:none">
+  <div id="app">
+    <header class="app-header">
+      <div class="header-left">
+        <button class="etab-pill" id="etabPill"></button>
+        <div>
+          <h1>Commandes</h1>
+          <span class="week-label" id="weekLabel">...</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="saveStatus" class="save-status"></span>
+        <button class="icon-btn" id="summaryBtn" title="Recapitulatif" style="display:none">📋</button>
+        <button class="icon-btn" id="refreshBtn" title="Recharger">↻</button>
+      </div>
+    </header>
 
-  // URL du Apps Script (après déploiement dans Google Sheets > Extensions > Apps Script)
-  // Laissez vide ('') tant que vous n'avez pas déployé le script
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyi2xS5tB1dMwtxigloetFXQfN6INssG-8PfyrDwdin3O7gF3Q_Fo-HTtpQMl_sNi24kg/exec',
+    <div class="search-bar">
+      <input type="search" id="searchInput" placeholder="Rechercher un produit, une reference..."
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
 
-  // Saison : mois où on est "en saison" (1=janvier … 12=décembre)
-  // Adaptez selon votre activité (ex: avril-octobre = saison)
-  MOIS_SAISON: [4, 5, 6, 7, 8, 9, 10],
-};
+    <main id="mainContent">
+      <div class="loading-state" id="loadingState">
+        <div class="spinner"></div>
+        <p>Chargement...</p>
+      </div>
+      <div id="productList" style="display:none"></div>
+    </main>
+
+    <div class="bottom-bar" id="bottomBar" style="display:none">
+      <div class="total-block">
+        <span class="total-label">Total HT</span>
+        <span class="total-amount" id="totalAmount">0,00 EUR</span>
+      </div>
+      <button class="validate-btn" id="validateBtn">Voir la commande</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="summaryModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="summaryTitle">Recapitulatif</h2>
+      <button class="icon-btn" id="closeModal">X</button>
+    </div>
+    <div class="modal-body" id="summaryContent"></div>
+    <div class="modal-footer">
+      <button class="copy-btn" id="copyBtn">📋 Copier et archiver</button>
+      <button class="reset-btn" id="resetBtn">🗑 Vider</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal" style="display:none">
+  <div class="modal modal--small">
+    <div class="modal-header">
+      <h2 id="editModalTitle">Modifier le produit</h2>
+      <button class="icon-btn" id="closeEditModal">X</button>
+    </div>
+    <div class="modal-body">
+      <label class="edit-label">Reference</label>
+      <input class="edit-input" type="text" id="editRef">
+      <label class="edit-label">Prix unitaire HT (EUR)</label>
+      <input class="edit-input" type="number" id="editPrix" step="0.01" min="0">
+      <label class="edit-label">Colissage (unites par colis)</label>
+      <input class="edit-input" type="number" id="editColissage" step="1" min="1">
+      <p class="edit-note">Modifications temporaires (session uniquement). Pour les rendre permanentes, mettez a jour le Google Sheet.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="copy-btn" id="saveEditBtn">Appliquer</button>
+      <button class="reset-btn" id="cancelEditBtn">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addModal" style="display:none">
+  <div class="modal modal--small">
+    <div class="modal-header">
+      <h2>Ajouter un produit</h2>
+      <button class="icon-btn" id="closeAddModal">X</button>
+    </div>
+    <div class="modal-body">
+      <label class="edit-label">Fournisseur</label>
+      <select class="edit-input" id="addFournisseur"></select>
+      <label class="edit-label">Nom court</label>
+      <input class="edit-input" type="text" id="addNomCourt">
+      <label class="edit-label">Designation complete</label>
+      <input class="edit-input" type="text" id="addDesignation">
+      <label class="edit-label">Reference</label>
+      <input class="edit-input" type="text" id="addRef">
+      <label class="edit-label">Categorie</label>
+      <input class="edit-input" type="text" id="addCategorie">
+      <label class="edit-label">Prix unitaire HT (EUR)</label>
+      <input class="edit-input" type="number" id="addPrix" step="0.01" min="0">
+      <label class="edit-label">Colissage</label>
+      <input class="edit-input" type="number" id="addColissage" step="1" min="1" value="1">
+      <p class="edit-note">Produit temporaire (session uniquement).</p>
+    </div>
+    <div class="modal-footer">
+      <button class="copy-btn" id="saveAddBtn">Ajouter</button>
+      <button class="reset-btn" id="cancelAddBtn">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
