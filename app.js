@@ -517,15 +517,60 @@ function openEditModal(key) {
 }
 function closeEditModal() { editModal.style.display='none'; state.editKey=null; }
 
-$('saveEditBtn').addEventListener('click',()=>{
+async function applyEdit(persistent) {
   const key=state.editKey; if(!key) return;
-  state.overrides[key]={
-    reference: $('editRef').value.trim(),
-    prix_ht:   parseFloat($('editPrix').value)||0,
-    colissage: parseInt($('editColissage').value)||1,
-  };
-  closeEditModal(); renderAccordion(); showToast('✏️ Modifie pour cette session');
-});
+  const p=state.produits.find(p=>productKey(p)===key); if(!p) return;
+  const d=getProductData(p);
+  const newRef       = $('editRef').value.trim();
+  const newPrix      = parseFloat($('editPrix').value)||0;
+  const newColissage = parseInt($('editColissage').value)||1;
+
+  // Applique en mémoire dans tous les cas
+  state.overrides[key]={ reference:newRef, prix_ht:newPrix, colissage:newColissage };
+
+  if(persistent && CONFIG.APPS_SCRIPT_URL) {
+    $('saveEditBtn').disabled=true;
+    $('saveEditBtn').textContent='Sauvegarde...';
+    try {
+      const res = await fetch(CONFIG.APPS_SCRIPT_URL+'?action=updateProduct', {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          fournisseur:  p.fournisseur,
+          oldReference: d.reference,
+          nomCourt:     p.nom_court,
+          reference:    newRef,
+          prix_ht:      newPrix,
+          colissage:    newColissage,
+        }),
+      });
+      const data = await res.json();
+      if(data.ok) {
+        // Met aussi à jour l'objet produit en mémoire pour éviter rechargement
+        p.reference=newRef; p.prix_ht=newPrix; p.colissage=newColissage;
+        delete state.overrides[key];
+        closeEditModal(); renderAccordion();
+        showToast('✅ Sauvegarde dans le Sheet !');
+      } else {
+        throw new Error(data.error||'Erreur inconnue');
+      }
+    } catch(err) {
+      showToast('⚠️ Erreur : '+err.message+' — modification locale conservee');
+      closeEditModal(); renderAccordion();
+    } finally {
+      $('saveEditBtn').disabled=false;
+      $('saveEditBtn').textContent='Sauvegarder dans le Sheet';
+    }
+  } else {
+    closeEditModal(); renderAccordion();
+    showToast(persistent && !CONFIG.APPS_SCRIPT_URL
+      ? '⚠️ Apps Script non configure — modif locale uniquement'
+      : '✏️ Modifie pour cette session');
+  }
+}
+
+$('saveEditBtn').addEventListener('click',()=>applyEdit(true));
+$('saveEditLocalBtn').addEventListener('click',()=>applyEdit(false));
 $('closeEditModal').addEventListener('click',closeEditModal);
 $('cancelEditBtn').addEventListener('click',closeEditModal);
 editModal.addEventListener('click',e=>{ if(e.target===editModal) closeEditModal(); });
