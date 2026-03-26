@@ -301,3 +301,7 @@ select.edit-input { height:40px; cursor:pointer; }
   cursor: pointer;
 }
 .secondary-btn:active { background: var(--bg); }
+
+/* Bouton fermeture - légerement distinct */
+.icon-btn--close { color: var(--text-muted); border-color: transparent; }
+.icon-btn--close:active { color: var(--danger); background: var(--danger-bg); }
