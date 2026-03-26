@@ -395,11 +395,25 @@ function renderSupplierBody(prods,search) {
   html+='</div>'; return html;
 }
 
+// Precalcule les nom_court qui ont plusieurs produits dans le catalogue complet
+function getNomCourtsMultiples(fournisseur) {
+  const counts={};
+  state.produits.filter(p=>p.fournisseur===fournisseur).forEach(p=>{
+    counts[p.nom_court]=(counts[p.nom_court]||0)+1;
+  });
+  return new Set(Object.entries(counts).filter(([,n])=>n>1).map(([k])=>k));
+}
+
 function renderGrouped(prods) {
+  if(!prods.length) return '';
+  const fournisseur=prods[0].fournisseur;
+  const multiNoms=getNomCourtsMultiples(fournisseur);
   const groups={};
   prods.forEach(p=>{ if(!groups[p.nom_court]) groups[p.nom_court]=[]; groups[p.nom_court].push(p); });
   return Object.entries(groups).map(([nc,items])=>{
-    if(items.length===1) return renderRow(items[0],false);
+    const isMulti=multiNoms.has(nc);
+    if(items.length===1 && !isMulti) return renderRow(items[0],false);
+    if(items.length===1 && isMulti)  return renderRow(items[0],true); // seul dans section mais multi dans catalogue
     return '<div class="nc-group"><div class="nc-header">'+escHtml(nc)+'</div>'+items.map(p=>renderRow(p,true)).join('')+'</div>';
   }).join('');
 }
