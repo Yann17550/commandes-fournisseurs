@@ -260,7 +260,7 @@ async function loadData() {
     state.produits = parseProduits(tsvP);
     state.fournisseurs = parseFournisseurs(tsvF);
     state.loaded = true;
-    const sups = getSuppliers(); if(sups.length) state.openSupplier=sups[0];
+    const sups = getSuppliers(); void sups; // aucun fournisseur ouvert par defaut
     const [saved,histo] = await Promise.all([loadCommandeRemote(), loadHistoRemote()]);
     if(Object.keys(saved).length>0){ state.quantities=saved; showToast('📂 Commande restauree'); }
     if(histo&&histo.quantities){ state.lastOrder=histo.quantities||{}; state.lastSemaine=histo.semaine||''; }
@@ -666,6 +666,20 @@ refreshBtn.addEventListener('click',()=>{
 });
 
 searchInput.addEventListener('input',()=>{ state.search=searchInput.value; renderAccordion(); });
+
+$('closeAppBtn').addEventListener('click',()=>closeApp());
+
+// ---- Fermeture onglet ------------------------------------
+// Sur mobile : bouton explicite dans le header
+// Sur desktop : Ctrl+W fonctionne nativement
+function closeApp() {
+  window.close();
+  // Fallback si window.close() est bloque (page pas ouverte par script)
+  // On remplace par une page vide
+  setTimeout(() => {
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#aaa;font-size:14px;">Vous pouvez fermer cet onglet.</div>';
+  }, 200);
+}
 
 // ---- Init -------------------------------------------------
 weekLabel.textContent=getWeekLabel();
