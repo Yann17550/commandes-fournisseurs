@@ -681,19 +681,15 @@ refreshBtn.addEventListener('click',()=>{
 
 searchInput.addEventListener('input',()=>{ state.search=searchInput.value; renderAccordion(); });
 
-$('closeAppBtn').addEventListener('click',()=>closeApp());
-
 // ---- Fermeture onglet ------------------------------------
-// Sur mobile : bouton explicite dans le header
-// Sur desktop : Ctrl+W fonctionne nativement
 function closeApp() {
   window.close();
-  // Fallback si window.close() est bloque (page pas ouverte par script)
-  // On remplace par une page vide
   setTimeout(() => {
     document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#aaa;font-size:14px;">Vous pouvez fermer cet onglet.</div>';
   }, 200);
 }
+const closeAppBtn = $('closeAppBtn');
+if(closeAppBtn) closeAppBtn.addEventListener('click', ()=>closeApp());
 
 // ---- Init -------------------------------------------------
 weekLabel.textContent=getWeekLabel();
