@@ -287,3 +287,17 @@ select.edit-input { height:40px; cursor:pointer; }
 
 /* Ligne recap avec unites */
 .summary-line-units { font-size:11px; color:var(--text-light); flex-shrink:0; }
+
+/* Bouton secondaire (session uniquement) */
+.secondary-btn {
+  height: 44px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+}
+.secondary-btn:active { background: var(--bg); }
