@@ -322,7 +322,7 @@ function renderAccordion() {
     productList.innerHTML='<div class="empty-state"><div class="emoji">📭</div><p>Aucun produit</p></div>'; return;
   }
 
-  let html='<div class="fab-row"><button class="fab-add" id="fabAddBtn">+ Produit temporaire</button></div>';
+  let html='<div class="fab-row"><button class="fab-add" id="fabAddBtn">+ Nouveau produit</button></div>';
 
   suppliers.forEach(sup=>{
     const prods=allProds.filter(p=>{
