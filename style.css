@@ -305,3 +305,180 @@ select.edit-input { height:40px; cursor:pointer; }
 /* Bouton fermeture - légerement distinct */
 .icon-btn--close { color: var(--text-muted); border-color: transparent; }
 .icon-btn--close:active { color: var(--danger); background: var(--danger-bg); }
+
+/* ============================================================
+   VUE GÉRANT — DEUX COLONNES
+   ============================================================ */
+
+/* Légende en haut */
+.gerant-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 14px 2px;
+}
+.gerant-col-label {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.gerant-col-a { background: #EFF6FF; color: #1D4ED8; }
+.gerant-col-b { background: #FFF7ED; color: #C2410C; }
+
+/* Ligne produit gérant */
+.gerant-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.gerant-row:last-child { border-bottom: none; }
+.gerant-row--header {
+  background: var(--bg);
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.gerant-row--active { background: #F0FDF4; }
+
+.gerant-produit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.gerant-produit .product-nom  { font-size: 13px; }
+.gerant-produit .product-sub  { font-size: 11px; }
+.gerant-produit .product-ref  { font-size: 10px; color: var(--text-light); }
+
+.gerant-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  width: 96px;
+}
+.gerant-cell--a .qty-stepper { border-color: #BFDBFE; }
+.gerant-cell--b .qty-stepper { border-color: #FED7AA; }
+.gerant-cell--a .qty-btn { color: #1D4ED8; }
+.gerant-cell--b .qty-btn { color: #C2410C; }
+
+/* Stepper compact pour gérant */
+.qty-stepper--sm .qty-btn  { width: 28px; height: 32px; font-size: 16px; }
+.qty-stepper--sm .qty-input{ width: 30px; height: 32px; font-size: 13px; }
+
+.gerant-line-total {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Sous-totaux par fournisseur */
+.gerant-subtotals {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.gerant-subtotals span:nth-child(1) { color: #1D4ED8; }
+.gerant-subtotals span:nth-child(2) { color: #C2410C; }
+.gerant-sub-total { color: var(--text); }
+
+/* Badge dans l'accordéon gérant */
+.gerant-badge {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border-mid);
+}
+.gb-a    { color: #1D4ED8; font-weight: 600; }
+.gb-b    { color: #C2410C; font-weight: 600; }
+.gb-sep  { color: var(--text-muted); }
+.gb-total{ color: var(--text); font-weight: 600; }
+
+/* ============================================================
+   RÉCAP GÉRANT DANS LE MODAL
+   ============================================================ */
+.summary-gerant-cols {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.summary-gcol {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+}
+.summary-gcol--a { background: #EFF6FF; color: #1D4ED8; }
+.summary-gcol--b { background: #FFF7ED; color: #C2410C; }
+
+.summary-line--gerant {
+  display: grid;
+  grid-template-columns: 1fr auto 72px 72px;
+  gap: 6px;
+  align-items: center;
+}
+.summary-gcell {
+  text-align: right;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.summary-gcell--a { color: #1D4ED8; }
+.summary-gcell--b { color: #C2410C; }
+
+.summary-gerant-subtotals {
+  display: grid;
+  grid-template-columns: 1fr 72px 72px auto;
+  gap: 6px;
+  padding: 5px 2px 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.summary-gerant-subtotals span:nth-child(2) { color: #1D4ED8; text-align: right; }
+.summary-gerant-subtotals span:nth-child(3) { color: #C2410C; text-align: right; }
+.summary-sup-total { color: var(--text); }
+
+.summary-grand-total--gerant {
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.summary-grand-total--gerant div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+.sgt-total {
+  border-top: 1px solid rgba(255,255,255,0.2);
+  padding-top: 6px;
+  font-size: 16px !important;
+  font-weight: 600;
+}
+
+/* Boutons copie gérant */
+.copy-btn--a { background: #1D4ED8; }
+.copy-btn--b { background: #C2410C; }
+.modal-footer { flex-wrap: wrap; }
