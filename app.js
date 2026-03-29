@@ -531,60 +531,56 @@ function openEditModal(key) {
 }
 function closeEditModal() { editModal.style.display='none'; state.editKey=null; }
 
-async function applyEdit(persistent) {
-  const key=state.editKey; if(!key) return;
-  const p=state.produits.find(p=>productKey(p)===key); if(!p) return;
-  const d=getProductData(p);
+async function applyEdit() {
+  const key = state.editKey; if(!key) return;
+  const p   = state.produits.find(p=>productKey(p)===key); if(!p) return;
+  const d   = getProductData(p);
   const newRef       = $('editRef').value.trim();
-  const newPrix      = parseFloat($('editPrix').value)||0;
-  const newColissage = parseInt($('editColissage').value)||1;
+  const newPrix      = parseFloat($('editPrix').value) || 0;
+  const newColissage = parseInt($('editColissage').value) || 1;
 
-  // Applique en mémoire dans tous les cas
-  state.overrides[key]={ reference:newRef, prix_ht:newPrix, colissage:newColissage };
+  if(!CONFIG.APPS_SCRIPT_URL) {
+    showToast('⚠️ Apps Script non configure dans config.js');
+    return;
+  }
 
-  if(persistent && CONFIG.APPS_SCRIPT_URL) {
-    $('saveEditBtn').disabled=true;
-    $('saveEditBtn').textContent='Sauvegarde...';
-    try {
-      const res = await fetch(CONFIG.APPS_SCRIPT_URL+'?action=updateProduct', {
-        method: 'POST',
-        headers: {'Content-Type':'text/plain'},
-        body: JSON.stringify({
-          fournisseur:  p.fournisseur,
-          oldReference: d.reference,
-          nomCourt:     p.nom_court,
-          reference:    newRef,
-          prix_ht:      newPrix,
-          colissage:    newColissage,
-        }),
-      });
-      const data = await res.json();
-      if(data.ok) {
-        // Met aussi à jour l'objet produit en mémoire pour éviter rechargement
-        p.reference=newRef; p.prix_ht=newPrix; p.colissage=newColissage;
-        delete state.overrides[key];
-        closeEditModal(); renderAccordion();
-        showToast('✅ Sauvegarde dans le Sheet !');
-      } else {
-        throw new Error(data.error||'Erreur inconnue');
-      }
-    } catch(err) {
-      showToast('⚠️ Erreur : '+err.message+' — modification locale conservee');
-      closeEditModal(); renderAccordion();
-    } finally {
-      $('saveEditBtn').disabled=false;
-      $('saveEditBtn').textContent='Sauvegarder dans le Sheet';
-    }
-  } else {
-    closeEditModal(); renderAccordion();
-    showToast(persistent && !CONFIG.APPS_SCRIPT_URL
-      ? '⚠️ Apps Script non configure — modif locale uniquement'
-      : '✏️ Modifie pour cette session');
+  const btn = $('saveEditBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sauvegarde...';
+
+  try {
+    const res  = await fetch(CONFIG.APPS_SCRIPT_URL+'?action=updateProduct', {
+      method:  'POST',
+      headers: {'Content-Type':'text/plain'},
+      body:    JSON.stringify({
+        fournisseur:  p.fournisseur,
+        oldReference: d.reference,
+        nomCourt:     p.nom_court,
+        reference:    newRef,
+        prix_ht:      newPrix,
+        colissage:    newColissage,
+      }),
+    });
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.error || 'Erreur inconnue');
+
+    // Met à jour l'objet en mémoire — plus besoin d'override
+    p.reference = newRef;
+    p.prix_ht   = newPrix;
+    p.colissage = newColissage;
+    delete state.overrides[key];
+    closeEditModal();
+    renderAccordion();
+    showToast('✅ Mis à jour dans le Sheet');
+  } catch(err) {
+    showToast('⚠️ Echec : ' + err.message);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Sauvegarder';
   }
 }
 
-$('saveEditBtn').addEventListener('click',()=>applyEdit(true));
-$('saveEditLocalBtn').addEventListener('click',()=>applyEdit(false));
+$('saveEditBtn').addEventListener('click', applyEdit);
 $('closeEditModal').addEventListener('click',closeEditModal);
 $('cancelEditBtn').addEventListener('click',closeEditModal);
 editModal.addEventListener('click',e=>{ if(e.target===editModal) closeEditModal(); });
@@ -599,20 +595,59 @@ function openAddModal() {
 }
 function closeAddModal() { addModal.style.display='none'; }
 
-$('saveAddBtn').addEventListener('click',()=>{
-  const fournisseur=$('addFournisseur').value.trim();
-  const nom_court=$('addNomCourt').value.trim();
+$('saveAddBtn').addEventListener('click', async ()=>{
+  const fournisseur = $('addFournisseur').value.trim();
+  const nom_court   = $('addNomCourt').value.trim();
   if(!fournisseur||!nom_court){ showToast('⚠️ Fournisseur et nom court obligatoires'); return; }
-  const designation=$('addDesignation').value.trim()||nom_court;
-  state.produits.push({
-    fournisseur, reference:$('addRef').value.trim()||'TEMP-'+Date.now(),
-    designation, label:cleanDesignation(designation),
-    tva:5.5, prix_ht:parseFloat($('addPrix').value)||0, droit_alcool:0, taxe_secu:0,
-    nom_court, categorie:$('addCategorie').value.trim()||'Divers',
-    colissage:parseInt($('addColissage').value)||1, prix_colis:0,
-    etablissement:'AB', actif:true, isTemp:true,
-  });
-  closeAddModal(); renderAccordion(); showToast('✅ Produit temporaire ajoute');
+
+  const designation  = $('addDesignation').value.trim() || nom_court;
+  const reference    = $('addRef').value.trim() || 'NEW-'+Date.now();
+  const categorie    = $('addCategorie').value.trim() || 'Divers';
+  const prix_ht      = parseFloat($('addPrix').value) || 0;
+  const colissage    = parseInt($('addColissage').value) || 1;
+  const etablissement= state.etab && state.etab.id !== 'gerant'
+                       ? state.etab.id.toUpperCase() : 'AB';
+
+  const newProd = {
+    fournisseur, reference, designation, label: cleanDesignation(designation),
+    tva: 5.5, prix_ht, droit_alcool: 0, taxe_secu: 0,
+    nom_court, categorie, colissage, prix_colis: 0,
+    etablissement, actif: true, isTemp: !CONFIG.APPS_SCRIPT_URL,
+  };
+
+  // Insère dans la liste locale à la bonne position (après les produits du même fournisseur)
+  const lastIdx = state.produits.reduce((acc, p, i) => p.fournisseur === fournisseur ? i : acc, -1);
+  if(lastIdx >= 0) state.produits.splice(lastIdx + 1, 0, newProd);
+  else state.produits.push(newProd);
+
+  closeAddModal();
+  renderAccordion();
+
+  // Sauvegarde dans le Sheet si Apps Script configuré
+  if(CONFIG.APPS_SCRIPT_URL) {
+    showToast('⏳ Sauvegarde dans le Sheet...');
+    try {
+      const res  = await fetch(CONFIG.APPS_SCRIPT_URL+'?action=addProduct', {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({ fournisseur, reference, designation, nom_court,
+                               categorie, tva: 5.5, prix_ht, droit_alcool: 0,
+                               taxe_secu: 0, colissage, prix_colis: 0, etablissement }),
+      });
+      const data = await res.json();
+      if(data.ok) {
+        newProd.isTemp = false;
+        showToast('✅ Produit ajouté dans le Sheet (ligne '+data.insertAt+')');
+      } else {
+        throw new Error(data.error || 'Erreur inconnue');
+      }
+    } catch(err) {
+      showToast('⚠️ Ajout local OK, Sheet KO : '+err.message);
+      newProd.isTemp = true;
+    }
+  } else {
+    showToast('✅ Produit ajouté (session — configurez Apps Script pour le rendre permanent)');
+  }
 });
 $('closeAddModal').addEventListener('click',closeAddModal);
 $('cancelAddModal') && $('cancelAddModal').addEventListener('click',closeAddModal);
