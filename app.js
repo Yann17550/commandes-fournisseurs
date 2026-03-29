@@ -279,21 +279,18 @@ async function loadData() {
     state.fournisseurs = parseFournisseurs(tsvF);
     state.loaded = true;
     const sups = getSuppliers(); void sups; // aucun fournisseur ouvert par defaut
-    let savedPromise, histoPromise;
     if(state.etab && state.etab.id === 'gerant') {
       // Gérant : charge les deux commandes en parallèle
-      [savedPromise, histoPromise] = await Promise.all([
+      const [savedA, savedB] = await Promise.all([
         loadCommandeRemoteById('a'),
         loadCommandeRemoteById('b'),
-        loadHistoRemote(),
-      ].reduce((acc,p,i)=>{ acc[i<2?i:2]=p; return acc; },[]));
-      const [savedA, savedB] = await Promise.all([loadCommandeRemoteById('a'), loadCommandeRemoteById('b')]);
-      state.quantities_a = savedA;
-      state.quantities_b = savedB;
-      if(Object.keys(savedA).length>0 || Object.keys(savedB).length>0)
+      ]);
+      state.quantities_a = savedA || {};
+      state.quantities_b = savedB || {};
+      if(Object.keys(state.quantities_a).length>0 || Object.keys(state.quantities_b).length>0)
         showToast('📂 Commandes restaurées');
     } else {
-      const [saved,histo] = await Promise.all([loadCommandeRemote(), loadHistoRemote()]);
+      const [saved, histo] = await Promise.all([loadCommandeRemote(), loadHistoRemote()]);
       if(Object.keys(saved).length>0){ state.quantities=saved; showToast('📂 Commande restauree'); }
       if(histo&&histo.quantities){ state.lastOrder=histo.quantities||{}; state.lastSemaine=histo.semaine||''; }
     }
@@ -770,6 +767,10 @@ function renderAccordionGerant() {
     i.addEventListener('change', onQtyInputGerant);
     i.addEventListener('focus', e=>e.target.select());
   });
+  // Edit btns dans la vue gérant
+  productList.querySelectorAll('.edit-btn').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation(); openEditModal(b.dataset.key);
+  }));
 }
 
 function renderSupplierBodyGerant(prods, search) {
@@ -783,12 +784,7 @@ function renderSupplierBodyGerant(prods, search) {
   if(fInfo.notes) infos.push('⚠️ '+escHtml(fInfo.notes));
   if(infos.length) html+=`<div class="acc-info-bar">${infos.join(' · ')}</div>`;
 
-  // En-tête colonnes sticky
-  html += '<div class="gerant-row gerant-row--header">'
-    +'<div class="gerant-produit"></div>'
-    +'<div class="gerant-cell gerant-cell--a">🍕</div>'
-    +'<div class="gerant-cell gerant-cell--b">🌋</div>'
-    +'</div>';
+
 
   const multiNoms = getNomCourtsMultiples(sup);
   const groups    = {};
@@ -823,38 +819,51 @@ function renderSupplierBodyGerant(prods, search) {
 }
 
 function renderRowGerant(p, isVariant) {
-  const key  = productKey(p);
-  const d    = getProductData(p);
-  const qa   = state.quantities_a[key]||0;
-  const qb   = state.quantities_b[key]||0;
-  const pc   = getPrixColis(p);
+  const key = productKey(p);
+  const d   = getProductData(p);
+  const qa  = state.quantities_a[key]||0;
+  const qb  = state.quantities_b[key]||0;
+  const pc  = getPrixColis(p);
   const lastQtyA = state.lastOrder[key]||0;
-
   const label = isVariant ? d.label : p.nom_court;
   const sub   = !isVariant && d.label !== p.nom_court ? d.label : '';
 
+  // Chaque établissement : une ligne stepper + montant inline
+  const rowA = `<div class="gr-etab-row gr-etab-row--a">
+    <span class="gr-etab-icon">🍕</span>
+    <div class="qty-stepper qty-stepper--sm">
+      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="-1">−</button>
+      <input class="qty-input-g" type="number" min="0" step="1" value="${qa}"
+             data-key="${escHtml(key)}" data-etab="a" inputmode="numeric">
+      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="1">+</button>
+    </div>
+    <span class="gr-line-total${qa>0?' gr-line-total--active':''}">${qa>0?fmtPrice(qa*pc):'—'}</span>
+  </div>`;
+
+  const rowB = `<div class="gr-etab-row gr-etab-row--b">
+    <span class="gr-etab-icon">🌋</span>
+    <div class="qty-stepper qty-stepper--sm">
+      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="-1">−</button>
+      <input class="qty-input-g" type="number" min="0" step="1" value="${qb}"
+             data-key="${escHtml(key)}" data-etab="b" inputmode="numeric">
+      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="1">+</button>
+    </div>
+    <span class="gr-line-total${qb>0?' gr-line-total--active':''}">${qb>0?fmtPrice(qb*pc):'—'}</span>
+  </div>`;
+
   return `<div class="gerant-row${(qa>0||qb>0)?' gerant-row--active':''}" data-key="${escHtml(key)}">
-    <div class="gerant-produit">
-      <span class="product-nom">${escHtml(label)}</span>
-      ${sub?`<span class="product-sub">${escHtml(sub)}</span>`:''}
-      <span class="product-ref">${escHtml(d.reference)} · ${fmtPrice(pc)}/colis</span>
-      ${lastQtyA>0&&!qa&&!qb?`<span class="last-order">↩ ${lastQtyA} derniere fois</span>`:''}
-    </div>
-    <div class="gerant-cell gerant-cell--a">
-      <div class="qty-stepper qty-stepper--sm">
-        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="-1">−</button>
-        <input class="qty-input-g" type="number" min="0" step="1" value="${qa}" data-key="${escHtml(key)}" data-etab="a" inputmode="numeric">
-        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="1">+</button>
+    <div class="gr-header">
+      <div class="gr-info">
+        <span class="product-nom">${escHtml(label)}</span>
+        ${sub?`<span class="product-sub">${escHtml(sub)}</span>`:''}
+        <span class="gr-ref">${escHtml(d.reference)} · ${fmtPrice(pc)}/colis</span>
+        ${lastQtyA>0&&!qa&&!qb?`<span class="last-order">↩ ${lastQtyA} dernière fois</span>`:''}
       </div>
-      ${qa>0?`<div class="gerant-line-total">${fmtPrice(qa*pc)}</div>`:''}
+      <button class="edit-btn" data-key="${escHtml(key)}" title="Modifier">✏️</button>
     </div>
-    <div class="gerant-cell gerant-cell--b">
-      <div class="qty-stepper qty-stepper--sm">
-        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="-1">−</button>
-        <input class="qty-input-g" type="number" min="0" step="1" value="${qb}" data-key="${escHtml(key)}" data-etab="b" inputmode="numeric">
-        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="1">+</button>
-      </div>
-      ${qb>0?`<div class="gerant-line-total">${fmtPrice(qb*pc)}</div>`:''}
+    <div class="gr-steppers">
+      ${rowA}
+      ${rowB}
     </div>
   </div>`;
 }
@@ -998,8 +1007,10 @@ function openSummaryGerant() {
         <div class="summary-line summary-line--gerant">
           <span class="summary-line-name">${escHtml(d.label||p.nom_court)}</span>
           <span class="summary-line-ref">${escHtml(d.reference)}</span>
-          <span class="summary-gcell summary-gcell--a">${qa>0?qa+'x = '+fmtPrice(ta):'—'}</span>
-          <span class="summary-gcell summary-gcell--b">${qb>0?qb+'x = '+fmtPrice(tb):'—'}</span>
+          <div class="summary-gcells">
+            <span class="summary-gcell summary-gcell--a">${qa>0?qa+' colis = '+fmtPrice(ta):'—'}</span>
+            <span class="summary-gcell summary-gcell--b">${qb>0?qb+' colis = '+fmtPrice(tb):'—'}</span>
+          </div>
         </div>`).join('')}
       <div class="summary-gerant-subtotals">
         <span>${fmtPrice(supTA)}</span>
