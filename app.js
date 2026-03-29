@@ -22,7 +22,10 @@ function saveEtabLocal(id) { localStorage.setItem(ETAB_KEY, id); }
 let state = {
   etab: null,
   produits: [], fournisseurs: {},
-  quantities: {}, lastOrder: {}, lastSemaine: '',
+  quantities:   {},  // commande de l'etab courant (A ou B)
+  quantities_a: {},  // commande Pizza d'Oleron  (vue gerant)
+  quantities_b: {},  // commande Le Vesuvio       (vue gerant)
+  lastOrder: {}, lastSemaine: '',
   overrides: {},
   openSupplier: null, search: '', loaded: false, error: null, editKey: null,
 };
@@ -166,19 +169,34 @@ function scheduleSave() {
   saveTimer = setTimeout(doSave, 1500);
 }
 async function doSave() {
-  if(!CONFIG.APPS_SCRIPT_URL||!state.etab||state.etab.id==='gerant') return;
+  if(!CONFIG.APPS_SCRIPT_URL||!state.etab) return;
   try {
-    const body = JSON.stringify(Object.fromEntries(Object.entries(state.quantities).filter(([,v])=>v>0)));
-    await fetch(CONFIG.APPS_SCRIPT_URL+'?action=write&etab='+state.etab.id,{
-      method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'}, body,
-    });
+    if(state.etab.id === 'gerant') {
+      // Sauvegarde les deux étabs
+      await Promise.all([
+        fetchSave('a', state.quantities_a),
+        fetchSave('b', state.quantities_b),
+      ]);
+    } else {
+      await fetchSave(state.etab.id, state.quantities);
+    }
     showSaveStatus('💾 OK');
   } catch { showSaveStatus('⚠️ Erreur'); }
 }
+function fetchSave(etabId, quantities) {
+  const body = JSON.stringify(Object.fromEntries(Object.entries(quantities).filter(([,v])=>v>0)));
+  return fetch(CONFIG.APPS_SCRIPT_URL+'?action=write&etab='+etabId,{
+    method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'}, body,
+  });
+}
 async function loadCommandeRemote() {
   if(!CONFIG.APPS_SCRIPT_URL||!state.etab||state.etab.id==='gerant') return {};
+  return loadCommandeRemoteById(state.etab.id);
+}
+async function loadCommandeRemoteById(etabId) {
+  if(!CONFIG.APPS_SCRIPT_URL) return {};
   try {
-    const r = await fetch(CONFIG.APPS_SCRIPT_URL+'?action=read&etab='+state.etab.id);
+    const r = await fetch(CONFIG.APPS_SCRIPT_URL+'?action=read&etab='+etabId);
     return r.ok ? (await r.json())||{} : {};
   } catch { return {}; }
 }
@@ -261,9 +279,24 @@ async function loadData() {
     state.fournisseurs = parseFournisseurs(tsvF);
     state.loaded = true;
     const sups = getSuppliers(); void sups; // aucun fournisseur ouvert par defaut
-    const [saved,histo] = await Promise.all([loadCommandeRemote(), loadHistoRemote()]);
-    if(Object.keys(saved).length>0){ state.quantities=saved; showToast('📂 Commande restauree'); }
-    if(histo&&histo.quantities){ state.lastOrder=histo.quantities||{}; state.lastSemaine=histo.semaine||''; }
+    let savedPromise, histoPromise;
+    if(state.etab && state.etab.id === 'gerant') {
+      // Gérant : charge les deux commandes en parallèle
+      [savedPromise, histoPromise] = await Promise.all([
+        loadCommandeRemoteById('a'),
+        loadCommandeRemoteById('b'),
+        loadHistoRemote(),
+      ].reduce((acc,p,i)=>{ acc[i<2?i:2]=p; return acc; },[]));
+      const [savedA, savedB] = await Promise.all([loadCommandeRemoteById('a'), loadCommandeRemoteById('b')]);
+      state.quantities_a = savedA;
+      state.quantities_b = savedB;
+      if(Object.keys(savedA).length>0 || Object.keys(savedB).length>0)
+        showToast('📂 Commandes restaurées');
+    } else {
+      const [saved,histo] = await Promise.all([loadCommandeRemote(), loadHistoRemote()]);
+      if(Object.keys(saved).length>0){ state.quantities=saved; showToast('📂 Commande restauree'); }
+      if(histo&&histo.quantities){ state.lastOrder=histo.quantities||{}; state.lastSemaine=histo.semaine||''; }
+    }
     render();
   } catch(err) {
     console.error(err); state.error=err.message;
@@ -316,6 +349,7 @@ function renderError() {
 
 // ---- Accordeon --------------------------------------------
 function renderAccordion() {
+  if(state.etab && state.etab.id === 'gerant') { renderAccordionGerant(); return; }
   const suppliers=getSuppliers(), search=state.search.toLowerCase();
   const allProds=getProduitsForEtab();
   if(!suppliers.length){
@@ -509,10 +543,19 @@ function updateAccordionBadge(changedKey) {
 
 function updateTotal() {
   let total=0, hasAny=false;
-  getProduitsForEtab().forEach(p=>{
-    const qty=state.quantities[productKey(p)]||0;
-    if(qty>0){ total+=qty*getPrixColis(p); hasAny=true; }
-  });
+  if(state.etab && state.etab.id==='gerant') {
+    state.produits.forEach(p=>{
+      const key=productKey(p);
+      const qa=(state.quantities_a[key]||0), qb=(state.quantities_b[key]||0);
+      const qt=qa+qb;
+      if(qt>0){ total+=qt*getPrixColis(p); hasAny=true; }
+    });
+  } else {
+    getProduitsForEtab().forEach(p=>{
+      const qty=state.quantities[productKey(p)]||0;
+      if(qty>0){ total+=qty*getPrixColis(p); hasAny=true; }
+    });
+  }
   totalAmount.textContent=fmtPrice(total);
   bottomBar.style.display=hasAny?'flex':'none';
   summaryBtn.style.display=hasAny?'flex':'none';
@@ -654,8 +697,228 @@ $('cancelAddModal') && $('cancelAddModal').addEventListener('click',closeAddModa
 $('cancelAddBtn').addEventListener('click',closeAddModal);
 addModal.addEventListener('click',e=>{ if(e.target===addModal) closeAddModal(); });
 
+// ---- Vue Gérant : accordéon 2 colonnes ----------------------
+function renderAccordionGerant() {
+  const suppliers = getSuppliers();
+  const search    = state.search.toLowerCase();
+  if(!suppliers.length){
+    productList.innerHTML='<div class="empty-state"><div class="emoji">📭</div><p>Aucun produit</p></div>'; return;
+  }
+
+  const etabA = CONFIG.ETABS.find(e=>e.id==='a');
+  const etabB = CONFIG.ETABS.find(e=>e.id==='b');
+
+  let html = '<div class="gerant-legend">'
+    +'<span class="gerant-col-label gerant-col-a">'+etabA.icon+' '+escHtml(etabA.label)+'</span>'
+    +'<span class="gerant-col-label gerant-col-b">'+etabB.icon+' '+escHtml(etabB.label)+'</span>'
+    +'</div>';
+
+  suppliers.forEach(sup => {
+    const prods = state.produits.filter(p => {
+      if(p.fournisseur !== sup) return false;
+      if(!search) return true;
+      return p.nom_court.toLowerCase().includes(search)
+          || p.designation.toLowerCase().includes(search)
+          || p.reference.toLowerCase().includes(search);
+    });
+    if(search && prods.length===0) return;
+
+    const isOpen   = state.openSupplier === sup;
+    const totalA   = prods.reduce((s,p)=>s+(state.quantities_a[productKey(p)]||0)*getPrixColis(p),0);
+    const totalB   = prods.reduce((s,p)=>s+(state.quantities_b[productKey(p)]||0)*getPrixColis(p),0);
+    const hasAny   = totalA>0 || totalB>0;
+    const appel    = getJourAppel(sup);
+    const appelHtml= appel
+      ? '<span class="acc-appel'+(appel.today?' acc-appel--today':'')+'">'+
+        (appel.today?'📞 Auj.':escHtml(appel.label))+'</span>'
+      : '';
+
+    html += `<div class="accordion-block${isOpen?' is-open':''}" data-sup="${escHtml(sup)}">
+      <button class="accordion-header" data-sup="${escHtml(sup)}">
+        <div class="acc-left">
+          <div class="acc-title-row">
+            <span class="acc-name">${escHtml(sup)}</span>
+            ${appelHtml}
+          </div>
+          ${hasAny ? `<span class="acc-badge gerant-badge">
+            <span class="gb-a">${fmtPrice(totalA)}</span>
+            <span class="gb-sep">+</span>
+            <span class="gb-b">${fmtPrice(totalB)}</span>
+            <span class="gb-total">= ${fmtPrice(totalA+totalB)}</span>
+          </span>` : ''}
+        </div>
+        <span class="acc-chevron">${isOpen?'▾':'▸'}</span>
+      </button>
+      ${isOpen ? renderSupplierBodyGerant(prods, search) : ''}
+    </div>`;
+  });
+
+  productList.innerHTML = html || '<div class="empty-state"><div class="emoji">🔍</div><p>Aucun resultat</p></div>';
+
+  productList.querySelectorAll('.accordion-header').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const sup=btn.dataset.sup;
+      state.openSupplier=state.openSupplier===sup?null:sup;
+      renderAccordionGerant();
+      setTimeout(()=>{ const o=productList.querySelector('.accordion-block.is-open'); if(o) o.scrollIntoView({behavior:'smooth',block:'start'}); },40);
+    });
+  });
+
+  // Bind steppers gérant
+  productList.querySelectorAll('.qty-btn-g').forEach(b=>b.addEventListener('click', onQtyBtnGerant));
+  productList.querySelectorAll('.qty-input-g').forEach(i=>{
+    i.addEventListener('change', onQtyInputGerant);
+    i.addEventListener('focus', e=>e.target.select());
+  });
+}
+
+function renderSupplierBodyGerant(prods, search) {
+  const scores  = getScores();
+  const sorted  = sortProducts(prods);
+  const sup     = prods[0].fournisseur;
+  const fInfo   = state.fournisseurs[sup]||{};
+  let html      = '<div class="acc-body">';
+
+  const infos=[];
+  if(fInfo.notes) infos.push('⚠️ '+escHtml(fInfo.notes));
+  if(infos.length) html+=`<div class="acc-info-bar">${infos.join(' · ')}</div>`;
+
+  // En-tête colonnes sticky
+  html += '<div class="gerant-row gerant-row--header">'
+    +'<div class="gerant-produit"></div>'
+    +'<div class="gerant-cell gerant-cell--a">🍕</div>'
+    +'<div class="gerant-cell gerant-cell--b">🌋</div>'
+    +'</div>';
+
+  const multiNoms = getNomCourtsMultiples(sup);
+  const groups    = {};
+  sorted.forEach(p=>{ if(!groups[p.nom_court]) groups[p.nom_court]=[]; groups[p.nom_court].push(p); });
+
+  Object.entries(groups).forEach(([nc, items])=>{
+    const isMulti = multiNoms.has(nc);
+    if(items.length > 1) {
+      html += '<div class="nc-group">'
+        +'<div class="nc-header">'+escHtml(nc)+'</div>'
+        +items.map(p=>renderRowGerant(p, true)).join('')
+        +'</div>';
+    } else {
+      html += renderRowGerant(items[0], isMulti);
+    }
+  });
+
+  // Sous-totaux
+  const totalA = prods.reduce((s,p)=>s+(state.quantities_a[productKey(p)]||0)*getPrixColis(p),0);
+  const totalB = prods.reduce((s,p)=>s+(state.quantities_b[productKey(p)]||0)*getPrixColis(p),0);
+  if(totalA>0 || totalB>0) {
+    html += '<div class="gerant-subtotals">'
+      +'<span class="gerant-sub-a">'+fmtPrice(totalA)+'</span>'
+      +'<span class="gerant-sub-sep">·</span>'
+      +'<span class="gerant-sub-b">'+fmtPrice(totalB)+'</span>'
+      +'<span class="gerant-sub-total">Total : '+fmtPrice(totalA+totalB)+'</span>'
+      +'</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderRowGerant(p, isVariant) {
+  const key  = productKey(p);
+  const d    = getProductData(p);
+  const qa   = state.quantities_a[key]||0;
+  const qb   = state.quantities_b[key]||0;
+  const pc   = getPrixColis(p);
+  const lastQtyA = state.lastOrder[key]||0;
+
+  const label = isVariant ? d.label : p.nom_court;
+  const sub   = !isVariant && d.label !== p.nom_court ? d.label : '';
+
+  return `<div class="gerant-row${(qa>0||qb>0)?' gerant-row--active':''}" data-key="${escHtml(key)}">
+    <div class="gerant-produit">
+      <span class="product-nom">${escHtml(label)}</span>
+      ${sub?`<span class="product-sub">${escHtml(sub)}</span>`:''}
+      <span class="product-ref">${escHtml(d.reference)} · ${fmtPrice(pc)}/colis</span>
+      ${lastQtyA>0&&!qa&&!qb?`<span class="last-order">↩ ${lastQtyA} derniere fois</span>`:''}
+    </div>
+    <div class="gerant-cell gerant-cell--a">
+      <div class="qty-stepper qty-stepper--sm">
+        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="-1">−</button>
+        <input class="qty-input-g" type="number" min="0" step="1" value="${qa}" data-key="${escHtml(key)}" data-etab="a" inputmode="numeric">
+        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="1">+</button>
+      </div>
+      ${qa>0?`<div class="gerant-line-total">${fmtPrice(qa*pc)}</div>`:''}
+    </div>
+    <div class="gerant-cell gerant-cell--b">
+      <div class="qty-stepper qty-stepper--sm">
+        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="-1">−</button>
+        <input class="qty-input-g" type="number" min="0" step="1" value="${qb}" data-key="${escHtml(key)}" data-etab="b" inputmode="numeric">
+        <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="1">+</button>
+      </div>
+      ${qb>0?`<div class="gerant-line-total">${fmtPrice(qb*pc)}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function onQtyBtnGerant(e) {
+  const key   = e.currentTarget.dataset.key;
+  const etab  = e.currentTarget.dataset.etab;
+  const delta = parseInt(e.currentTarget.dataset.delta);
+  const store = etab==='a' ? state.quantities_a : state.quantities_b;
+  setQtyGerant(key, etab, Math.max(0,(store[key]||0)+delta));
+}
+function onQtyInputGerant(e) {
+  const key  = e.currentTarget.dataset.key;
+  const etab = e.currentTarget.dataset.etab;
+  setQtyGerant(key, etab, Math.max(0,parseInt(e.currentTarget.value)||0));
+}
+function setQtyGerant(key, etab, qty) {
+  const store = etab==='a' ? state.quantities_a : state.quantities_b;
+  store[key]  = qty;
+  // Mise à jour chirurgicale de la ligne
+  const row = productList.querySelector(`.gerant-row[data-key="${CSS.escape(key)}"]`);
+  if(row) {
+    const p = state.produits.find(p=>productKey(p)===key);
+    if(p) {
+      const isVariant = row.closest('.nc-group') !== null;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = renderRowGerant(p, isVariant);
+      const newRow = tmp.firstElementChild;
+      row.replaceWith(newRow);
+      newRow.querySelectorAll('.qty-btn-g').forEach(b=>b.addEventListener('click',onQtyBtnGerant));
+      newRow.querySelectorAll('.qty-input-g').forEach(i=>{
+        i.addEventListener('change',onQtyInputGerant);
+        i.addEventListener('focus',e=>e.target.select());
+      });
+    }
+  }
+  updateAccordionBadgeGerant(key);
+  updateTotal();
+  scheduleSave();
+}
+
+function updateAccordionBadgeGerant(changedKey) {
+  const p = state.produits.find(p=>productKey(p)===changedKey); if(!p) return;
+  const block = productList.querySelector(`.accordion-block[data-sup="${CSS.escape(p.fournisseur)}"]`); if(!block) return;
+  const prods = state.produits.filter(pr=>pr.fournisseur===p.fournisseur);
+  const tA = prods.reduce((s,pr)=>s+(state.quantities_a[productKey(pr)]||0)*getPrixColis(pr),0);
+  const tB = prods.reduce((s,pr)=>s+(state.quantities_b[productKey(pr)]||0)*getPrixColis(pr),0);
+  const left  = block.querySelector('.acc-left');
+  const badge = left.querySelector('.acc-badge');
+  if(tA>0||tB>0) {
+    const h=`<span class="acc-badge gerant-badge">
+      <span class="gb-a">${fmtPrice(tA)}</span>
+      <span class="gb-sep">+</span>
+      <span class="gb-b">${fmtPrice(tB)}</span>
+      <span class="gb-total">= ${fmtPrice(tA+tB)}</span>
+    </span>`;
+    if(badge) badge.outerHTML=h; else left.insertAdjacentHTML('beforeend',h);
+  } else if(badge) badge.remove();
+}
+
 // ---- Recapitulatif ----------------------------------------
 function openSummary() {
+  if(state.etab && state.etab.id==='gerant') { openSummaryGerant(); return; }
+
   const allProds=getProduitsForEtab(), bySupplier={};
   allProds.forEach(p=>{
     const qty=state.quantities[productKey(p)]||0; if(!qty) return;
@@ -689,7 +952,106 @@ function openSummary() {
   summaryModal.dataset.text=textParts.join('\n');
   summaryModal.style.display='flex';
 }
-function closeSummary() { summaryModal.style.display='none'; }
+
+function openSummaryGerant() {
+  const etabA = CONFIG.ETABS.find(e=>e.id==='a');
+  const etabB = CONFIG.ETABS.find(e=>e.id==='b');
+
+  // Collecte tous les produits commandés (A ou B)
+  const allKeys = new Set([
+    ...Object.keys(state.quantities_a).filter(k=>state.quantities_a[k]>0),
+    ...Object.keys(state.quantities_b).filter(k=>state.quantities_b[k]>0),
+  ]);
+  if(!allKeys.size) return;
+
+  // Groupe par fournisseur
+  const bySupplier = {};
+  allKeys.forEach(key=>{
+    const p = state.produits.find(p=>productKey(p)===key); if(!p) return;
+    if(!bySupplier[p.fournisseur]) bySupplier[p.fournisseur]=[];
+    bySupplier[p.fournisseur].push(p);
+  });
+
+  let grandTotalA=0, grandTotalB=0;
+  const htmlParts=[];
+  const textPartsA=['=== '+etabA.label.toUpperCase()+' '+getWeekLabel()+' ===\n'];
+  const textPartsB=['=== '+etabB.label.toUpperCase()+' '+getWeekLabel()+' ===\n'];
+
+  Object.entries(bySupplier).sort(([a],[b])=>a.localeCompare(b,'fr')).forEach(([sup,prods])=>{
+    let supTA=0, supTB=0;
+    const lines=prods.map(p=>{
+      const key=productKey(p), d=getProductData(p), pc=getPrixColis(p);
+      const qa=state.quantities_a[key]||0, qb=state.quantities_b[key]||0;
+      const ta=qa*pc, tb=qb*pc;
+      supTA+=ta; supTB+=tb;
+      return {p,d,pc,qa,qb,ta,tb};
+    });
+    grandTotalA+=supTA; grandTotalB+=supTB;
+
+    htmlParts.push(`<div class="summary-supplier">
+      <div class="summary-supplier-name">${escHtml(sup)}</div>
+      <div class="summary-gerant-cols">
+        <div class="summary-gcol summary-gcol--a">${etabA.icon} ${escHtml(etabA.label)}</div>
+        <div class="summary-gcol summary-gcol--b">${etabB.icon} ${escHtml(etabB.label)}</div>
+      </div>
+      ${lines.map(({p,d,qa,qb,ta,tb})=>`
+        <div class="summary-line summary-line--gerant">
+          <span class="summary-line-name">${escHtml(d.label||p.nom_court)}</span>
+          <span class="summary-line-ref">${escHtml(d.reference)}</span>
+          <span class="summary-gcell summary-gcell--a">${qa>0?qa+'x = '+fmtPrice(ta):'—'}</span>
+          <span class="summary-gcell summary-gcell--b">${qb>0?qb+'x = '+fmtPrice(tb):'—'}</span>
+        </div>`).join('')}
+      <div class="summary-gerant-subtotals">
+        <span>${fmtPrice(supTA)}</span>
+        <span>${fmtPrice(supTB)}</span>
+        <span class="summary-sup-total">= ${fmtPrice(supTA+supTB)}</span>
+      </div>
+    </div>`);
+
+    // Texte A
+    const linesA=lines.filter(l=>l.qa>0);
+    if(linesA.length){
+      textPartsA.push('\n--- '+sup+' ---');
+      linesA.forEach(({p,d,qa,ta})=>textPartsA.push(qa+'x '+(d.label||p.nom_court)+' (ref: '+d.reference+') = '+fmtPrice(ta)));
+      textPartsA.push('Sous-total : '+fmtPrice(supTA));
+    }
+    // Texte B
+    const linesB=lines.filter(l=>l.qb>0);
+    if(linesB.length){
+      textPartsB.push('\n--- '+sup+' ---');
+      linesB.forEach(({p,d,qb,tb})=>textPartsB.push(qb+'x '+(d.label||p.nom_court)+' (ref: '+d.reference+') = '+fmtPrice(tb)));
+      textPartsB.push('Sous-total : '+fmtPrice(supTB));
+    }
+  });
+
+  htmlParts.push(`<div class="summary-grand-total summary-grand-total--gerant">
+    <div><span>${etabA.icon} ${escHtml(etabA.label)}</span><span>${fmtPrice(grandTotalA)}</span></div>
+    <div><span>${etabB.icon} ${escHtml(etabB.label)}</span><span>${fmtPrice(grandTotalB)}</span></div>
+    <div class="sgt-total"><span>Total général</span><span>${fmtPrice(grandTotalA+grandTotalB)}</span></div>
+  </div>`);
+
+  textPartsA.push('\nTOTAL HT : '+fmtPrice(grandTotalA));
+  textPartsB.push('\nTOTAL HT : '+fmtPrice(grandTotalB));
+
+  summaryContent.innerHTML = htmlParts.join('');
+  // Deux boutons copie dans le footer
+  summaryModal.dataset.textA = textPartsA.join('\n');
+  summaryModal.dataset.textB = textPartsB.join('\n');
+  summaryModal.dataset.text  = textPartsA.join('\n') + '\n\n' + textPartsB.join('\n');
+  summaryModal.style.display='flex';
+
+  // Affiche les boutons copie spécifiques gérant
+  $('copyBtn').style.display='none';
+  $('copyBtnA').style.display='flex';
+  $('copyBtnB').style.display='flex';
+}
+function closeSummary() {
+  summaryModal.style.display='none';
+  // Remet les boutons dans l'état normal
+  $('copyBtn').style.display='flex';
+  $('copyBtnA').style.display='none';
+  $('copyBtnB').style.display='none';
+}
 
 // ---- Events -----------------------------------------------
 validateBtn.addEventListener('click',openSummary);
@@ -702,10 +1064,26 @@ $('copyBtn').addEventListener('click',()=>{
   archiveCommande();
   navigator.clipboard.writeText(summaryModal.dataset.text||'').then(()=>showToast('✅ Copie et archive'));
 });
+$('copyBtnA').addEventListener('click',()=>{
+  recordOrder(state.quantities_a);
+  navigator.clipboard.writeText(summaryModal.dataset.textA||'').then(()=>showToast('✅ '+CONFIG.ETABS.find(e=>e.id==="a").label+' copié'));
+});
+$('copyBtnB').addEventListener('click',()=>{
+  recordOrder(state.quantities_b);
+  navigator.clipboard.writeText(summaryModal.dataset.textB||'').then(()=>showToast('✅ '+CONFIG.ETABS.find(e=>e.id==="b").label+' copié'));
+});
 
 $('resetBtn').addEventListener('click',()=>{
   if(!confirm('Vider la commande en cours ?')) return;
-  state.quantities={}; clearCommandeRemote();
+  if(state.etab && state.etab.id==='gerant') {
+    state.quantities_a={}; state.quantities_b={};
+    if(CONFIG.APPS_SCRIPT_URL) {
+      fetch(CONFIG.APPS_SCRIPT_URL+'?action=clear&etab=a',{method:'POST',mode:'no-cors'}).catch(()=>{});
+      fetch(CONFIG.APPS_SCRIPT_URL+'?action=clear&etab=b',{method:'POST',mode:'no-cors'}).catch(()=>{});
+    }
+  } else {
+    state.quantities={}; clearCommandeRemote();
+  }
   closeSummary(); renderAccordion(); updateTotal();
 });
 
