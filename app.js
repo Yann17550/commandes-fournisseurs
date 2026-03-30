@@ -247,23 +247,49 @@ function renderEtabScreen() {
   screenApp.style.display='none';
 }
 
-function selectEtab(id) {
+async function selectEtab(id) {
   const etab = CONFIG.ETABS.find(e=>e.id===id); if(!etab) return;
+  const prevId = state.etab ? state.etab.id : null;
   state.etab = etab; saveEtabLocal(id);
   etabPill.textContent = etab.icon+' '+etab.label;
   $('summaryTitle').textContent = 'Commande \u2014 '+etab.label;
   screenEtab.style.display='none';
   screenApp.style.display='flex';
   switchEtabBtn.style.display='block';
-  if(!state.loaded) loadData(); else render();
+
+  if(!state.loaded) {
+    loadData();
+  } else if(prevId !== id) {
+    // Changement d'etab : garde les produits, recharge juste la commande
+    loadingState.style.display='flex';
+    productList.style.display='none';
+    if(id === 'gerant') {
+      const [savedA, savedB] = await Promise.all([
+        loadCommandeRemoteById('a'),
+        loadCommandeRemoteById('b'),
+      ]);
+      state.quantities_a = savedA || {};
+      state.quantities_b = savedB || {};
+    } else {
+      const [saved, histo] = await Promise.all([
+        loadCommandeRemoteById(id),
+        loadHistoRemote(),
+      ]);
+      state.quantities = saved || {};
+      if(histo && histo.quantities){ state.lastOrder=histo.quantities||{}; state.lastSemaine=histo.semaine||''; }
+    }
+    state.openSupplier = null;
+    render();
+  } else {
+    render();
+  }
 }
 
 switchEtabBtn.addEventListener('click',()=>{
-  state.quantities={}; state.loaded=false;
+  // On affiche juste l'écran de choix — les données restent en mémoire
   screenApp.style.display='none'; renderEtabScreen();
 });
 etabPill.addEventListener('click',()=>{
-  state.quantities={}; state.loaded=false;
   screenApp.style.display='none'; renderEtabScreen();
 });
 
@@ -1099,8 +1125,11 @@ $('resetBtn').addEventListener('click',()=>{
 });
 
 refreshBtn.addEventListener('click',()=>{
-  state.quantities={}; state.loaded=false;
-  productList.style.display='none'; loadData(); showToast('Rechargement...');
+  // Vide tout et recharge depuis le Sheet
+  state.quantities={}; state.quantities_a={}; state.quantities_b={};
+  state.loaded=false;
+  productList.style.display='none';
+  loadData(); showToast('↻ Rechargement...');
 });
 
 searchInput.addEventListener('input',()=>{ state.search=searchInput.value; renderAccordion(); });
