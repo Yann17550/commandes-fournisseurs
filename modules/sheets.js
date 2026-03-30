@@ -6,8 +6,8 @@
 // ================================================================
 
 const SHEET_CONFIG = {
-  SCRIPT_URL: 'https://script.google.com/macros/d/YOUR_SCRIPT_ID/usercontent',
-  // Replace YOUR_SCRIPT_ID with your actual Google Apps Script deployment ID
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyi2xS5tB1dMwtxigloetFXQfN6INssG-8PfyrDwdin3O7gF3Q_Fo-HTtpQMl_sNi24kg/exec',
+
 };
 
 // ================================================================
