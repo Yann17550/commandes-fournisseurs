@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                     
-                    // Navigate to app screen
+                    // Navigate to app screen  
                     const screenEtab = document.getElementById('screenEtab');
                     const screenApp = document.getElementById('screenApp');
                     
