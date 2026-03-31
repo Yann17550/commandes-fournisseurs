@@ -6,7 +6,7 @@
 console.log('=== APP.JS LOADING ===');
 
 // ================================================================
-// TEST: Check if modules exist
+// Initialize app on DOM ready
 // ================================================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM ready, initializing app...');
@@ -16,9 +16,8 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Checking modules...');
         console.log('initState exists?', typeof initState);
         console.log('getState exists?', typeof getState);
-        console.log('updateAllUI exists?', typeof updateAllUI);
         console.log('loadAllEstablishments exists?', typeof loadAllEstablishments);
-        console.log('initializeEtabSelector exists?', typeof initializeEtabSelector);
+        console.log('renderEtabSelect exists?', typeof renderEtabSelect);
         
         if (typeof initState !== 'function') {
             alert('ERREUR: Les modules ne sont pas chargés correctement!');
@@ -26,38 +25,80 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            // Initialize state
+            // Step 1: Initialize state
             console.log('Step 1: Init state');
             initState();
-            console.log('State initialized:', getState());
             
-            // Load establishments
+            // Step 2: Load establishments from localStorage
             console.log('Step 2: Load establishments');
             loadAllEstablishments();
-            console.log('Establishments loaded:', getState());
             
-            // Initialize establishment selector
-            console.log('Step 3: Init selector');
-            initializeEtabSelector();
+            const state = getState();
+            console.log('State after load:', state);
             
-            // Navigate to app screen
-            console.log('Step 4: Navigate to app');
-            const screenTab = document.getElementById('screenTab');
-            const screenApp = document.getElementById('screenApp');
+            // Step 3: Generate establishment cards on selection screen
+            console.log('Step 3: Generate establishment cards');
+            const etabCards = document.getElementById('etabCards');
             
-            if (screenTab && screenApp) {
-                screenTab.style.display = 'none';
-                screenApp.style.display = 'block';
-                console.log('Navigated to app screen');
-            } else {
-                console.error('Screen elements not found!', {screenTab, screenApp});
+            if (!etabCards) {
+                console.error('ERROR: etabCards element not found!');
+                return;
             }
             
-            // Update UI
-            console.log('Step 5: Update UI');
-            updateAllUI();
+            // Clear existing cards
+            etabCards.innerHTML = '';
+            
+            // Get list of establishments
+            const establishments = Object.keys(state.etabs);
+            console.log('Establishments to display:', establishments);
+            
+            if (establishments.length === 0) {
+                etabCards.innerHTML = '<p class="etab-sub">Aucun établissement configuré</p>';
+                return;
+            }
+            
+            // Create a card for each establishment
+            establishments.forEach(etabName => {
+                const card = document.createElement('div');
+                card.className = 'etab-card';
+                card.textContent = etabName;
+                card.dataset.etab = etabName;
+                
+                // Add click handler
+                card.addEventListener('click', function() {
+                    console.log('Card clicked for:', etabName);
+                    
+                    // Set current establishment
+                    if (typeof selectEtab === 'function') {
+                        selectEtab(etabName);
+                    } else {
+                        console.error('selectEtab function not found!');
+                        return;
+                    }
+                    
+                    // Navigate to app screen
+                    const screenEtab = document.getElementById('screenEtab');
+                    const screenApp = document.getElementById('screenApp');
+                    
+                    if (screenEtab && screenApp) {
+                        screenEtab.style.display = 'none';
+                        screenApp.style.display = 'block';
+                        console.log('Navigated to app screen for:', etabName);
+                    } else {
+                        console.error('Screen elements not found!', {screenEtab, screenApp});
+                    }
+                    
+                    // Update UI
+                    if (typeof updateAllUI === 'function') {
+                        updateAllUI();
+                    }
+                });
+                
+                etabCards.appendChild(card);
+            });
             
             console.log('=== APP INITIALIZED SUCCESSFULLY ===');
+            console.log('User can now select an establishment');
             
         } catch(e) {
             console.error('INIT ERROR:', e);
