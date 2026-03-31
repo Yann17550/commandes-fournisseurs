@@ -1,43 +1,26 @@
-// ================================================================
-// app.js - Refactored Entry Point
-// ================================================================
-// This file orchestrates all modules and initializes the application
-// Modules are loaded in order: state, ui, sheets, establishment, commands, suppliers
-// ================================================================
+// TEST: Are modules loaded?
+console.log('=== MODULE LOAD TEST ===');
+console.log('initState exists?', typeof initState);
+console.log('getState exists?', typeof getState);
+console.log('updateAllUI exists?', typeof updateAllUI);
+console.log('loadAllEstablishments exists?', typeof loadAllEstablishments);
 
-// ================================================================
-// Initialize Application on Page Load
-// ================================================================
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('App initializing...');
+if (typeof initState !== 'function') {
+  alert('ERREUR: modules/state.js n\'est pas chargé!');
+} else {
+  alert('SUCCES: Les modules sont bien chargés! On peut initialiser.');
   
-  // 1. Initialize state from localStorage
-  initState();
-  console.log('State initialized');
-  
-  // 2. Load all establishments (or create defaults)
-  loadAllEstablishments();
-  console.log('Establishments loaded');
-  
-  // 3. Initialize establishment selector listener
-  initializeEtabSelector();
-  console.log('Etab selector initialized');
-  
-  // 4. Render all UI elements
-  updateAllUI();
-  console.log('UI updated');
-  
-  // 5. Attach event listeners for buttons
-  attachEventListeners();
-  console.log('Event listeners attached');
-  
-  console.log('✅ Application ready!');
-});
-
-// ================================================================
-// Attach Event Listeners to UI Elements
-// ================================================================
-function attachEventListeners() {
-  // NOTE: Add button event listeners here based on your HTML IDs
-  // This is a placeholder for future button handlers
+  // Try to init
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('App initializing...');
+    try {
+      initState();
+      console.log('State initialized');
+      loadAllEstablishments();
+      console.log('Establishments loaded');
+    } catch(e) {
+      console.error('ERROR:', e);
+      alert('ERREUR: ' + e.message);
+    }
+  });
 }
