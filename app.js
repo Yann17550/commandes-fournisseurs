@@ -3,13 +3,6 @@
 // Ce fichier charge les modules et initialise l'application
 // ================================================================
 
-// ================================================================
-// IMPORTS DE TOUS LES MODULES
-// ================================================================
-import { initState, getState, selectEtab, getCurrentEstablishment } from './modules/state.js';
-import { initializeData } from './modules/data-loader.js';
-import { updateAllUI } from './modules/ui.js';
-
 console.log('=== APP.JS LOADING ===');
 
 // ================================================================
@@ -24,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('initState exists?', typeof initState);
         console.log('getState exists?', typeof getState);
         console.log('initializeData exists?', typeof initializeData);
-        console.log('updateAllUI exists?', typeof updateAllUI);
+        console.log('renderEtabSelect exists?', typeof renderEtabSelect);
         
         if (typeof initState !== 'function') {
             alert('ERREUR: Les modules ne sont pas chargés correctement!');
@@ -75,10 +68,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Card clicked for:', etabName);
                     
                     // Set current establishment
-                    if (typeof selectEtab === 'function') {
-                        selectEtab(etabName);
+                    if (typeof setCurrentEtab === 'function') {
+                        setCurrentEtab(etabName);
                     } else {
-                        console.error('selectEtab function not found!');
+                        console.error('setCurrentEtab function not found!');
                         return;
                     }
                     
