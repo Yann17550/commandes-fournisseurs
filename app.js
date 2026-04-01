@@ -15,9 +15,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         console.log('Checking modules...');
         console.log('initState exists?', typeof initState);
+        console.log('loadAllEstablishments exists?', typeof loadAllEstablishments);
         console.log('getState exists?', typeof getState);
-        console.log('initializeData exists?', typeof initializeData);
-        console.log('renderEtabSelect exists?', typeof renderEtabSelect);
         
         if (typeof initState !== 'function') {
             alert('ERREUR: Les modules ne sont pas chargés correctement!');
@@ -29,11 +28,24 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Step 1: Init state');
             initState();
             
-            // Step 2: Load data from TSV files (establishments, suppliers, sheets)
-            initializeData();
+            // Step 2: Load/initialize establishments
+            console.log('Step 2: Load establishments');
+            if (typeof loadAllEstablishments === 'function') {
+                loadAllEstablishments();
+            } else {
+                console.error('loadAllEstablishments function not found!');
+                // Fallback: create default establishments
+                if (typeof initializeEtab === 'function') {
+                    initializeEtab("Pizza d'Oléron");
+                    initializeEtab('Le Vésuv');
+                    if (typeof setCurrentEtab === 'function') {
+                        setCurrentEtab("Pizza d'Oléron");
+                    }
+                }
+            }
             
             const state = getState();
-            console.log('State after load:', state);
+            console.log('State after init:', state);
             
             // Step 3: Generate establishment cards on selection screen
             console.log('Step 3: Generate establishment cards');
@@ -64,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.dataset.etab = etabName;
                 
                 // Add click handler
-                card.addEventListener('click', function() {
+                card.addEventListener('click', async function() {
                     console.log('Card clicked for:', etabName);
                     
                     // Set current establishment
@@ -87,28 +99,41 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('Screen elements not found!', {screenEtab, screenApp});
                     }
                     
-                    // Load data for establishment
+                    // Load data for establishment (if available)
                     if (typeof initializeData === 'function') {
-                        initializeData().then(() => {
-                            console.log('Data loaded successfully');
+                        try {
+                            console.log('Loading data from TSV files...');
+                            const data = await initializeData();
+                            console.log('Data loaded successfully:', data);
+                            
+                            // Store data in current establishment state
+                            const currentState = getCurrentEtabState();
+                            if (currentState && data) {
+                                currentState.products = data.products || [];
+                                // Convert suppliers array to object keyed by name
+                                if (data.suppliers) {
+                                    currentState.fournisseurs = {};
+                                    data.suppliers.forEach(supplier => {
+                                        currentState.fournisseurs[supplier.Nom || supplier.nom] = supplier;
+                                    });
+                                }
+                                saveState();
+                            }
+                            
                             // Update UI
                             if (typeof updateAllUI === 'function') {
                                 updateAllUI();
                             }
-                        }).catch(error => {
+                        } catch (error) {
                             console.error('Error loading data:', error);
-                            alert('Erreur lors du chargement des données');
-                        });
+                            alert('Erreur lors du chargement des données: ' + error.message);
+                        }
                     } else {
-                        // Fallback if initializeData not available
+                        console.warn('initializeData not available, using cached data');
+                        // Update UI with cached data
                         if (typeof updateAllUI === 'function') {
                             updateAllUI();
                         }
-                    }
-                    
-                    // Update UI
-                    if (typeof updateAllUI === 'function') {
-                        updateAllUI();
                     }
                 });
                 
