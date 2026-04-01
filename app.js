@@ -144,7 +144,6 @@ function getProduitsForEtab() {
     return e==='AB'||e===''||e===up;
   });
 }
-
 // ---- Overrides et colissage -------------------------------
 function getProductData(p) {
   const ov = state.overrides[productKey(p)]||{};
@@ -286,7 +285,6 @@ async function selectEtab(id) {
 }
 
 switchEtabBtn.addEventListener('click',()=>{
-  // On affiche juste l'écran de choix — les données restent en mémoire
   screenApp.style.display='none'; renderEtabScreen();
 });
 etabPill.addEventListener('click',()=>{
@@ -300,13 +298,14 @@ async function loadData() {
     const [tsvP,tsvF] = await Promise.all([
       fetch(CONFIG.SHEETS.produits,{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); }),
       fetch(CONFIG.SHEETS.fournisseurs,{cache:'no-store'}).then(r=>r.text()).catch(()=>''),
+
     ]);
     state.produits = parseProduits(tsvP);
     state.fournisseurs = parseFournisseurs(tsvF);
     state.loaded = true;
-    const sups = getSuppliers(); void sups; // aucun fournisseur ouvert par defaut
+    const sups = getSuppliers(); void sups;
+
     if(state.etab && state.etab.id === 'gerant') {
-      // Gérant : charge les deux commandes en parallèle
       const [savedA, savedB] = await Promise.all([
         loadCommandeRemoteById('a'),
         loadCommandeRemoteById('b'),
@@ -326,7 +325,6 @@ async function loadData() {
     loadingState.style.display='none'; renderError();
   }
 }
-
 // ---- Fournisseurs -----------------------------------------
 function getSuppliers() {
   const p = getProduitsForEtab();
@@ -470,7 +468,7 @@ function renderGrouped(prods) {
   return Object.entries(groups).map(([nc,items])=>{
     const isMulti=multiNoms.has(nc);
     if(items.length===1 && !isMulti) return renderRow(items[0],false);
-    if(items.length===1 && isMulti)  return renderRow(items[0],true); // seul dans section mais multi dans catalogue
+    if(items.length===1 && isMulti)  return renderRow(items[0],true);
     return '<div class="nc-group"><div class="nc-header">'+escHtml(nc)+'</div>'+items.map(p=>renderRow(p,true)).join('')+'</div>';
   }).join('');
 }
@@ -516,7 +514,6 @@ function renderRow(p,isVariant) {
     </div>
   </div>`;
 }
-
 function bindSteppers() {
   productList.querySelectorAll('.qty-btn').forEach(b=>b.addEventListener('click',onQtyBtn));
   productList.querySelectorAll('.qty-input').forEach(i=>{
@@ -630,7 +627,6 @@ async function applyEdit() {
     const json = await res.json();
     if(!json.ok) throw new Error(json.error || 'Erreur inconnue');
 
-    // Met à jour l'objet en mémoire — plus besoin d'override
     p.reference = newRef;
     p.prix_ht   = newPrix;
     p.colissage = newColissage;
@@ -681,7 +677,6 @@ $('saveAddBtn').addEventListener('click', async ()=>{
     etablissement, actif: true, isTemp: !CONFIG.APPS_SCRIPT_URL,
   };
 
-  // Insère dans la liste locale à la bonne position (après les produits du même fournisseur)
   const lastIdx = state.produits.reduce((acc, p, i) => p.fournisseur === fournisseur ? i : acc, -1);
   if(lastIdx >= 0) state.produits.splice(lastIdx + 1, 0, newProd);
   else state.produits.push(newProd);
@@ -689,7 +684,6 @@ $('saveAddBtn').addEventListener('click', async ()=>{
   closeAddModal();
   renderAccordion();
 
-  // Sauvegarde dans le Sheet si Apps Script configuré
   if(CONFIG.APPS_SCRIPT_URL) {
     showToast('⏳ Sauvegarde dans le Sheet...');
     try {
@@ -698,453 +692,358 @@ $('saveAddBtn').addEventListener('click', async ()=>{
         headers: {'Content-Type':'text/plain'},
         body: JSON.stringify({ fournisseur, reference, designation, nom_court,
                                categorie, tva: 5.5, prix_ht, droit_alcool: 0,
-                               taxe_secu: 0, colissage, prix_colis: 0, etablissement }),
+                               taxe_secu: 0, etablissement, colissage })
       });
-      const data = await res.json();
-      if(data.ok) {
-        newProd.isTemp = false;
-        showToast('✅ Produit ajouté dans le Sheet (ligne '+data.insertAt+')');
-      } else {
-        throw new Error(data.error || 'Erreur inconnue');
-      }
+      const json = await res.json();
+      if(!json.ok) throw new Error(json.error || "Erreur inconnue");
+      showToast("✅ Produit ajouté dans le Sheet");
     } catch(err) {
-      showToast('⚠️ Ajout local OK, Sheet KO : '+err.message);
-      newProd.isTemp = true;
+      showToast("⚠️ Échec : " + err.message);
     }
-  } else {
-    showToast('✅ Produit ajouté (session — configurez Apps Script pour le rendre permanent)');
   }
 });
-$('closeAddModal').addEventListener('click',closeAddModal);
-$('cancelAddModal') && $('cancelAddModal').addEventListener('click',closeAddModal);
-$('cancelAddBtn').addEventListener('click',closeAddModal);
-addModal.addEventListener('click',e=>{ if(e.target===addModal) closeAddModal(); });
+$('closeAddModal').addEventListener('click', closeAddModal);
+$('cancelAddBtn').addEventListener('click', closeAddModal);
+addModal.addEventListener('click', e => { if (e.target === addModal) closeAddModal(); });
+// ============================================================
+//  RÉCAPITULATIF
+// ============================================================
+summaryBtn.addEventListener('click', openSummary);
+validateBtn.addEventListener('click', openSummary);
+$('closeModal').addEventListener('click', closeSummary);
+$('resetBtn').addEventListener('click', resetCommande);
+$('copyBtn').addEventListener('click', () => copySummary('all'));
+$('copyBtnA').addEventListener('click', () => copySummary('a'));
+$('copyBtnB').addEventListener('click', () => copySummary('b'));
 
-// ---- Vue Gérant : accordéon 2 colonnes ----------------------
-function renderAccordionGerant() {
-  const suppliers = getSuppliers();
-  const search    = state.search.toLowerCase();
-  if(!suppliers.length){
-    productList.innerHTML='<div class="empty-state"><div class="emoji">📭</div><p>Aucun produit</p></div>'; return;
+function openSummary() {
+  renderSummary();
+  summaryModal.style.display = 'flex';
+}
+
+function closeSummary() {
+  summaryModal.style.display = 'none';
+}
+
+function renderSummary() {
+  const isGerant = state.etab && state.etab.id === 'gerant';
+  let html = '';
+  let grandTotal = 0;
+
+  const produits = state.produits;
+
+  if (isGerant) {
+    // --- Mode gérant ---
+    const suppliers = [...new Set(produits.map(p => p.fournisseur))].sort((a, b) => a.localeCompare(b, 'fr'));
+
+    suppliers.forEach(sup => {
+      const items = produits.filter(p => p.fournisseur === sup);
+      let totalA = 0, totalB = 0;
+
+      let block = `<div class="summary-supplier">
+        <div class="summary-supplier-name">${escHtml(sup)}</div>`;
+
+      items.forEach(p => {
+        const key = productKey(p);
+        const qa = state.quantities_a[key] || 0;
+        const qb = state.quantities_b[key] || 0;
+        if (!qa && !qb) return;
+
+        const prix = getPrixColis(p);
+        const lineA = qa ? qa * prix : 0;
+        const lineB = qb ? qb * prix : 0;
+
+        totalA += lineA;
+        totalB += lineB;
+
+        block += `
+          <div class="summary-line--gerant">
+            <div class="summary-line-name">${escHtml(p.nom_court)}</div>
+            <div class="summary-line-ref">${escHtml(p.reference)}</div>
+            <div class="summary-gcells">
+              <div class="summary-gcell summary-gcell--a">${qa || ''}</div>
+              <div class="summary-gcell summary-gcell--b">${qb || ''}</div>
+            </div>
+          </div>`;
+      });
+
+      if (totalA || totalB) {
+        const total = totalA + totalB;
+        grandTotal += total;
+
+        block += `
+          <div class="summary-gerant-subtotals">
+            <span>${fmtPrice(totalA)}</span>
+            <span>${fmtPrice(totalB)}</span>
+            <span class="summary-sup-total">${fmtPrice(total)}</span>
+          </div>
+        </div>`;
+
+        html += block;
+      }
+    });
+
+    html += `
+      <div class="summary-grand-total summary-grand-total--gerant">
+        <div><span>Total A</span><span>${fmtPrice(
+          Object.entries(state.quantities_a).reduce((s, [key, q]) => {
+            const p = produits.find(p => productKey(p) === key);
+            return s + (q || 0) * getPrixColis(p);
+          }, 0)
+        )}</span></div>
+
+        <div><span>Total B</span><span>${fmtPrice(
+          Object.entries(state.quantities_b).reduce((s, [key, q]) => {
+            const p = produits.find(p => productKey(p) === key);
+            return s + (q || 0) * getPrixColis(p);
+          }, 0)
+        )}</span></div>
+
+        <div class="sgt-total"><span>Total</span><span>${fmtPrice(grandTotal)}</span></div>
+      </div>`;
+
+    $('copyBtnA').style.display = 'block';
+    $('copyBtnB').style.display = 'block';
+
+  } else {
+    // --- Mode normal ---
+    const suppliers = getSuppliers();
+
+    suppliers.forEach(sup => {
+      const items = produits.filter(p => p.fournisseur === sup);
+      let total = 0;
+      let block = `<div class="summary-supplier">
+        <div class="summary-supplier-name">${escHtml(sup)}</div>`;
+
+      items.forEach(p => {
+        const key = productKey(p);
+        const qty = state.quantities[key] || 0;
+        if (!qty) return;
+
+        const prix = getPrixColis(p);
+        const line = qty * prix;
+        total += line;
+        grandTotal += line;
+
+        block += `
+          <div class="summary-line">
+            <span class="summary-line-qty">${qty}</span>
+            <span class="summary-line-name">${escHtml(p.nom_court)}</span>
+            <span class="summary-line-ref">${escHtml(p.reference)}</span>
+            <span class="summary-line-price">${fmtPrice(line)}</span>
+          </div>`;
+      });
+
+      if (total > 0) {
+        block += `<div class="summary-supplier-total">${fmtPrice(total)}</div></div>`;
+        html += block;
+      }
+    });
+
+    html += `
+      <div class="summary-grand-total">
+        <span>Total</span>
+        <span>${fmtPrice(grandTotal)}</span>
+      </div>`;
+
+    $('copyBtnA').style.display = 'none';
+    $('copyBtnB').style.display = 'none';
   }
 
-  const etabA = CONFIG.ETABS.find(e=>e.id==='a');
-  const etabB = CONFIG.ETABS.find(e=>e.id==='b');
+  summaryContent.innerHTML = html;
+}
 
-  let html = '<div class="gerant-legend">'
-    +'<span class="gerant-col-label gerant-col-a">'+etabA.icon+' '+escHtml(etabA.label)+'</span>'
-    +'<span class="gerant-col-label gerant-col-b">'+etabB.icon+' '+escHtml(etabB.label)+'</span>'
-    +'</div>';
+
+// ============================================================
+//  COPIE / ARCHIVAGE / RESET
+// ============================================================
+async function copySummary(mode) {
+  let text = '';
+  const isGerant = state.etab && state.etab.id === 'gerant';
+
+  if (isGerant) {
+    if (mode === 'a' || mode === 'b') {
+      text = buildCopyTextGerant(mode);
+    } else {
+      text = buildCopyTextGerant('all');
+    }
+  } else {
+    text = buildCopyTextNormal();
+  }
+
+  await navigator.clipboard.writeText(text);
+  showToast('📋 Copié');
+
+  if (!isGerant) archiveCommande();
+}
+
+function buildCopyTextNormal() {
+  let out = `Commande ${state.etab.label} — ${getWeekLabel()}\n\n`;
+  const suppliers = getSuppliers();
 
   suppliers.forEach(sup => {
-    const prods = state.produits.filter(p => {
-      if(p.fournisseur !== sup) return false;
-      if(!search) return true;
-      return p.nom_court.toLowerCase().includes(search)
-          || p.designation.toLowerCase().includes(search)
-          || p.reference.toLowerCase().includes(search);
+    const items = state.produits.filter(p => p.fournisseur === sup);
+    let block = '';
+    items.forEach(p => {
+      const key = productKey(p);
+      const qty = state.quantities[key] || 0;
+      if (!qty) return;
+      block += `${qty} × ${p.nom_court} (${p.reference})\n`;
     });
-    if(search && prods.length===0) return;
+    if (block) out += `--- ${sup} ---\n${block}\n`;
+  });
 
-    const isOpen   = state.openSupplier === sup;
-    const totalA   = prods.reduce((s,p)=>s+(state.quantities_a[productKey(p)]||0)*getPrixColis(p),0);
-    const totalB   = prods.reduce((s,p)=>s+(state.quantities_b[productKey(p)]||0)*getPrixColis(p),0);
-    const hasAny   = totalA>0 || totalB>0;
-    const appel    = getJourAppel(sup);
-    const appelHtml= appel
-      ? '<span class="acc-appel'+(appel.today?' acc-appel--today':'')+'">'+
-        (appel.today?'📞 Auj.':escHtml(appel.label))+'</span>'
-      : '';
+  return out.trim();
+}
 
-    html += `<div class="accordion-block${isOpen?' is-open':''}" data-sup="${escHtml(sup)}">
-      <button class="accordion-header" data-sup="${escHtml(sup)}">
-        <div class="acc-left">
-          <div class="acc-title-row">
+function buildCopyTextGerant(mode) {
+  let out = `Commandes Gérant — ${getWeekLabel()}\n\n`;
+
+  state.produits.forEach(p => {
+    const key = productKey(p);
+    const qa = state.quantities_a[key] || 0;
+    const qb = state.quantities_b[key] || 0;
+
+    if (mode === 'a' && !qa) return;
+    if (mode === 'b' && !qb) return;
+    if (mode === 'all' && !qa && !qb) return;
+
+    out += `${p.nom_court} (${p.reference}) — A:${qa}  B:${qb}\n`;
+  });
+
+  return out.trim();
+}
+
+function resetCommande() {
+  if (!confirm("Vider la commande ?")) return;
+
+  if (state.etab.id === 'gerant') {
+    state.quantities_a = {};
+    state.quantities_b = {};
+  } else {
+    state.quantities = {};
+  }
+
+  clearCommandeRemote();
+  closeSummary();
+  render();
+  showToast('🗑 Commande vidée');
+}
+// ============================================================
+//  RENDER ACCORDION GÉRANT
+// ============================================================
+function renderAccordionGerant() {
+  const produits = state.produits;
+  const suppliers = [...new Set(produits.map(p => p.fournisseur))].sort((a, b) => a.localeCompare(b, 'fr'));
+
+  let html = '';
+
+  suppliers.forEach(sup => {
+    const items = produits.filter(p => p.fournisseur === sup);
+    const totalA = items.reduce((s, p) => s + (state.quantities_a[productKey(p)] || 0) * getPrixColis(p), 0);
+    const totalB = items.reduce((s, p) => s + (state.quantities_b[productKey(p)] || 0) * getPrixColis(p), 0);
+    const total = totalA + totalB;
+
+    html += `
+      <div class="accordion-block is-open">
+        <div class="accordion-header">
+          <div class="acc-left">
             <span class="acc-name">${escHtml(sup)}</span>
-            ${appelHtml}
+            <span class="gerant-badge">
+              <span class="gb-a">${fmtPrice(totalA)}</span>
+              <span class="gb-sep">/</span>
+              <span class="gb-b">${fmtPrice(totalB)}</span>
+              <span class="gb-total">${fmtPrice(total)}</span>
+            </span>
           </div>
-          ${hasAny ? `<span class="acc-badge gerant-badge">
-            <span class="gb-a">${fmtPrice(totalA)}</span>
-            <span class="gb-sep">+</span>
-            <span class="gb-b">${fmtPrice(totalB)}</span>
-            <span class="gb-total">= ${fmtPrice(totalA+totalB)}</span>
-          </span>` : ''}
         </div>
-        <span class="acc-chevron">${isOpen?'▾':'▸'}</span>
-      </button>
-      ${isOpen ? renderSupplierBodyGerant(prods, search) : ''}
+        <div class="acc-body">
+          ${items.map(renderGerantRow).join('')}
+        </div>
+      </div>`;
+  });
+
+  productList.innerHTML = html;
+  bindGerantSteppers();
+}
+
+function renderGerantRow(p) {
+  const key = productKey(p);
+  const qa = state.quantities_a[key] || 0;
+  const qb = state.quantities_b[key] || 0;
+  const prix = getPrixColis(p);
+
+  const totalA = qa * prix;
+  const totalB = qb * prix;
+
+  return `
+    <div class="gerant-row ${qa || qb ? 'gerant-row--active' : ''}" data-key="${escHtml(key)}">
+      <div class="gr-header">
+        <div class="gr-info">
+          <div class="product-nom">${escHtml(p.nom_court)}</div>
+          <div class="gr-ref">${escHtml(p.reference)}</div>
+        </div>
+        <button class="edit-btn" data-key="${escHtml(key)}">✏️</button>
+      </div>
+
+      <div class="gr-steppers">
+        <div class="gr-etab-row gr-etab-row--a">
+          <span class="gr-etab-icon">🍕</span>
+          <div class="qty-stepper--sm">
+            <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="-1">−</button>
+            <input class="qty-input-g" type="number" value="${qa}" min="0" data-key="${escHtml(key)}" data-etab="a">
+            <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="1">+</button>
+          </div>
+          <span class="gr-line-total ${totalA ? 'gr-line-total--active' : ''}">${totalA ? fmtPrice(totalA) : ''}</span>
+        </div>
+
+        <div class="gr-etab-row gr-etab-row--b">
+          <span class="gr-etab-icon">🌋</span>
+          <div class="qty-stepper--sm">
+            <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="-1">−</button>
+            <input class="qty-input-g" type="number" value="${qb}" min="0" data-key="${escHtml(key)}" data-etab="b">
+            <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="1">+</button>
+          </div>
+          <span class="gr-line-total ${totalB ? 'gr-line-total--active' : ''}">${totalB ? fmtPrice(totalB) : ''}</span>
+        </div>
+      </div>
     </div>`;
-  });
+}
 
-  productList.innerHTML = html || '<div class="empty-state"><div class="emoji">🔍</div><p>Aucun resultat</p></div>';
-
-  productList.querySelectorAll('.accordion-header').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const sup=btn.dataset.sup;
-      state.openSupplier=state.openSupplier===sup?null:sup;
-      renderAccordionGerant();
-      setTimeout(()=>{ const o=productList.querySelector('.accordion-block.is-open'); if(o) o.scrollIntoView({behavior:'smooth',block:'start'}); },40);
-    });
+function bindGerantSteppers() {
+  productList.querySelectorAll('.qty-btn-g').forEach(b => b.addEventListener('click', onGerantQtyBtn));
+  productList.querySelectorAll('.qty-input-g').forEach(i => {
+    i.addEventListener('change', onGerantQtyInput);
+    i.addEventListener('focus', e => e.target.select());
   });
-
-  // Bind steppers gérant
-  productList.querySelectorAll('.qty-btn-g').forEach(b=>b.addEventListener('click', onQtyBtnGerant));
-  productList.querySelectorAll('.qty-input-g').forEach(i=>{
-    i.addEventListener('change', onQtyInputGerant);
-    i.addEventListener('focus', e=>e.target.select());
-  });
-  // Edit btns dans la vue gérant
-  productList.querySelectorAll('.edit-btn').forEach(b=>b.addEventListener('click', e=>{
-    e.stopPropagation(); openEditModal(b.dataset.key);
+  productList.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    openEditModal(b.dataset.key);
   }));
 }
 
-function renderSupplierBodyGerant(prods, search) {
-  const scores  = getScores();
-  const sorted  = sortProducts(prods);
-  const sup     = prods[0].fournisseur;
-  const fInfo   = state.fournisseurs[sup]||{};
-  let html      = '<div class="acc-body">';
-
-  const infos=[];
-  if(fInfo.notes) infos.push('⚠️ '+escHtml(fInfo.notes));
-  if(infos.length) html+=`<div class="acc-info-bar">${infos.join(' · ')}</div>`;
-
-
-
-  const multiNoms = getNomCourtsMultiples(sup);
-  const groups    = {};
-  sorted.forEach(p=>{ if(!groups[p.nom_court]) groups[p.nom_court]=[]; groups[p.nom_court].push(p); });
-
-  Object.entries(groups).forEach(([nc, items])=>{
-    const isMulti = multiNoms.has(nc);
-    if(items.length > 1) {
-      html += '<div class="nc-group">'
-        +'<div class="nc-header">'+escHtml(nc)+'</div>'
-        +items.map(p=>renderRowGerant(p, true)).join('')
-        +'</div>';
-    } else {
-      html += renderRowGerant(items[0], isMulti);
-    }
-  });
-
-  // Sous-totaux
-  const totalA = prods.reduce((s,p)=>s+(state.quantities_a[productKey(p)]||0)*getPrixColis(p),0);
-  const totalB = prods.reduce((s,p)=>s+(state.quantities_b[productKey(p)]||0)*getPrixColis(p),0);
-  if(totalA>0 || totalB>0) {
-    html += '<div class="gerant-subtotals">'
-      +'<span class="gerant-sub-a">'+fmtPrice(totalA)+'</span>'
-      +'<span class="gerant-sub-sep">·</span>'
-      +'<span class="gerant-sub-b">'+fmtPrice(totalB)+'</span>'
-      +'<span class="gerant-sub-total">Total : '+fmtPrice(totalA+totalB)+'</span>'
-      +'</div>';
-  }
-
-  html += '</div>';
-  return html;
-}
-
-function renderRowGerant(p, isVariant) {
-  const key = productKey(p);
-  const d   = getProductData(p);
-  const qa  = state.quantities_a[key]||0;
-  const qb  = state.quantities_b[key]||0;
-  const pc  = getPrixColis(p);
-  const lastQtyA = state.lastOrder[key]||0;
-  const label = isVariant ? d.label : p.nom_court;
-  const sub   = !isVariant && d.label !== p.nom_court ? d.label : '';
-
-  // Chaque établissement : une ligne stepper + montant inline
-  const rowA = `<div class="gr-etab-row gr-etab-row--a">
-    <span class="gr-etab-icon">🍕</span>
-    <div class="qty-stepper qty-stepper--sm">
-      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="-1">−</button>
-      <input class="qty-input-g" type="number" min="0" step="1" value="${qa}"
-             data-key="${escHtml(key)}" data-etab="a" inputmode="numeric">
-      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="1">+</button>
-    </div>
-    <span class="gr-line-total${qa>0?' gr-line-total--active':''}">${qa>0?fmtPrice(qa*pc):'—'}</span>
-  </div>`;
-
-  const rowB = `<div class="gr-etab-row gr-etab-row--b">
-    <span class="gr-etab-icon">🌋</span>
-    <div class="qty-stepper qty-stepper--sm">
-      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="-1">−</button>
-      <input class="qty-input-g" type="number" min="0" step="1" value="${qb}"
-             data-key="${escHtml(key)}" data-etab="b" inputmode="numeric">
-      <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="1">+</button>
-    </div>
-    <span class="gr-line-total${qb>0?' gr-line-total--active':''}">${qb>0?fmtPrice(qb*pc):'—'}</span>
-  </div>`;
-
-  return `<div class="gerant-row${(qa>0||qb>0)?' gerant-row--active':''}" data-key="${escHtml(key)}">
-    <div class="gr-header">
-      <div class="gr-info">
-        <span class="product-nom">${escHtml(label)}</span>
-        ${sub?`<span class="product-sub">${escHtml(sub)}</span>`:''}
-        <span class="gr-ref">${escHtml(d.reference)} · ${fmtPrice(pc)}/colis</span>
-        ${lastQtyA>0&&!qa&&!qb?`<span class="last-order">↩ ${lastQtyA} dernière fois</span>`:''}
-      </div>
-      <button class="edit-btn" data-key="${escHtml(key)}" title="Modifier">✏️</button>
-    </div>
-    <div class="gr-steppers">
-      ${rowA}
-      ${rowB}
-    </div>
-  </div>`;
-}
-
-function onQtyBtnGerant(e) {
-  const key   = e.currentTarget.dataset.key;
-  const etab  = e.currentTarget.dataset.etab;
-  const delta = parseInt(e.currentTarget.dataset.delta);
-  const store = etab==='a' ? state.quantities_a : state.quantities_b;
-  setQtyGerant(key, etab, Math.max(0,(store[key]||0)+delta));
-}
-function onQtyInputGerant(e) {
-  const key  = e.currentTarget.dataset.key;
+function onGerantQtyBtn(e) {
+  const key = e.currentTarget.dataset.key;
   const etab = e.currentTarget.dataset.etab;
-  setQtyGerant(key, etab, Math.max(0,parseInt(e.currentTarget.value)||0));
-}
-function setQtyGerant(key, etab, qty) {
-  const store = etab==='a' ? state.quantities_a : state.quantities_b;
-  store[key]  = qty;
-  // Mise à jour chirurgicale de la ligne
-  const row = productList.querySelector(`.gerant-row[data-key="${CSS.escape(key)}"]`);
-  if(row) {
-    const p = state.produits.find(p=>productKey(p)===key);
-    if(p) {
-      const isVariant = row.closest('.nc-group') !== null;
-      const tmp = document.createElement('div');
-      tmp.innerHTML = renderRowGerant(p, isVariant);
-      const newRow = tmp.firstElementChild;
-      row.replaceWith(newRow);
-      newRow.querySelectorAll('.qty-btn-g').forEach(b=>b.addEventListener('click',onQtyBtnGerant));
-      newRow.querySelectorAll('.qty-input-g').forEach(i=>{
-        i.addEventListener('change',onQtyInputGerant);
-        i.addEventListener('focus',e=>e.target.select());
-      });
-    }
-  }
-  updateAccordionBadgeGerant(key);
+  const delta = parseInt(e.currentTarget.dataset.delta);
+
+  const obj = etab === 'a' ? state.quantities_a : state.quantities_b;
+  obj[key] = Math.max(0, (obj[key] || 0) + delta);
+
+  renderAccordionGerant();
   updateTotal();
   scheduleSave();
 }
 
-function updateAccordionBadgeGerant(changedKey) {
-  const p = state.produits.find(p=>productKey(p)===changedKey); if(!p) return;
-  const block = productList.querySelector(`.accordion-block[data-sup="${CSS.escape(p.fournisseur)}"]`); if(!block) return;
-  const prods = state.produits.filter(pr=>pr.fournisseur===p.fournisseur);
-  const tA = prods.reduce((s,pr)=>s+(state.quantities_a[productKey(pr)]||0)*getPrixColis(pr),0);
-  const tB = prods.reduce((s,pr)=>s+(state.quantities_b[productKey(pr)]||0)*getPrixColis(pr),0);
-  const left  = block.querySelector('.acc-left');
-  const badge = left.querySelector('.acc-badge');
-  if(tA>0||tB>0) {
-    const h=`<span class="acc-badge gerant-badge">
-      <span class="gb-a">${fmtPrice(tA)}</span>
-      <span class="gb-sep">+</span>
-      <span class="gb-b">${fmtPrice(tB)}</span>
-      <span class="gb-total">= ${fmtPrice(tA+tB)}</span>
-    </span>`;
-    if(badge) badge.outerHTML=h; else left.insertAdjacentHTML('beforeend',h);
-  } else if(badge) badge.remove();
+function onGerantQtyInput(e) {
+  const key = e.currentTarget.dataset.key;
+  const etab = e.currentTarget.dataset.etab;
+  const val = Math.max(0, parseInt(e.currentTarget.value) || 0);
+
+  const obj = etab === 'a' ? state.quantities_a : state.quantities_b;
+  obj[key] = val;
+
+  renderAccordionGerant();
+  updateTotal();
+  scheduleSave();
 }
-
-// ---- Recapitulatif ----------------------------------------
-function openSummary() {
-  if(state.etab && state.etab.id==='gerant') { openSummaryGerant(); return; }
-
-  const allProds=getProduitsForEtab(), bySupplier={};
-  allProds.forEach(p=>{
-    const qty=state.quantities[productKey(p)]||0; if(!qty) return;
-    (bySupplier[p.fournisseur]=bySupplier[p.fournisseur]||[]).push({...p,qty});
-  });
-  if(!Object.keys(bySupplier).length) return;
-  let grandTotal=0;
-  const htmlParts=[], textParts=['=== '+state.etab.label.toUpperCase()+' '+getWeekLabel()+' ===\n'];
-  Object.entries(bySupplier).sort(([a],[b])=>a.localeCompare(b,'fr')).forEach(([sup,items])=>{
-    let supTotal=0;
-    const lines=items.map(p=>{ const d=getProductData(p),pc=getPrixColis(p),t=p.qty*pc; supTotal+=t; return {p,d,t,u:getNbUnites(p,p.qty)}; });
-    grandTotal+=supTotal;
-    htmlParts.push(`<div class="summary-supplier">
-      <div class="summary-supplier-name">${escHtml(sup)}</div>
-      ${lines.map(({p,d,t,u})=>`<div class="summary-line">
-        <span class="summary-line-qty">${p.qty}x</span>
-        <span class="summary-line-name">${escHtml(d.label||p.nom_court)}</span>
-        <span class="summary-line-ref">${escHtml(d.reference)}</span>
-        <span class="summary-line-units">${u} u.</span>
-        <span class="summary-line-price">${fmtPrice(t)}</span>
-      </div>`).join('')}
-      <div class="summary-supplier-total">Sous-total : ${fmtPrice(supTotal)}</div>
-    </div>`);
-    textParts.push('\n--- '+sup+' ---');
-    lines.forEach(({p,d,u})=>textParts.push(p.qty+'x '+(d.label||p.nom_court)+' (ref: '+d.reference+') = '+u+' u.'));
-    textParts.push('Sous-total HT : '+fmtPrice(supTotal));
-  });
-  htmlParts.push(`<div class="summary-grand-total"><span>Total HT</span><span>${fmtPrice(grandTotal)}</span></div>`);
-  textParts.push('\nTOTAL HT : '+fmtPrice(grandTotal));
-  summaryContent.innerHTML=htmlParts.join('');
-  summaryModal.dataset.text=textParts.join('\n');
-  summaryModal.style.display='flex';
-}
-
-function openSummaryGerant() {
-  const etabA = CONFIG.ETABS.find(e=>e.id==='a');
-  const etabB = CONFIG.ETABS.find(e=>e.id==='b');
-
-  // Collecte tous les produits commandés (A ou B)
-  const allKeys = new Set([
-    ...Object.keys(state.quantities_a).filter(k=>state.quantities_a[k]>0),
-    ...Object.keys(state.quantities_b).filter(k=>state.quantities_b[k]>0),
-  ]);
-  if(!allKeys.size) return;
-
-  // Groupe par fournisseur
-  const bySupplier = {};
-  allKeys.forEach(key=>{
-    const p = state.produits.find(p=>productKey(p)===key); if(!p) return;
-    if(!bySupplier[p.fournisseur]) bySupplier[p.fournisseur]=[];
-    bySupplier[p.fournisseur].push(p);
-  });
-
-  let grandTotalA=0, grandTotalB=0;
-  const htmlParts=[];
-  const textPartsA=['=== '+etabA.label.toUpperCase()+' '+getWeekLabel()+' ===\n'];
-  const textPartsB=['=== '+etabB.label.toUpperCase()+' '+getWeekLabel()+' ===\n'];
-
-  Object.entries(bySupplier).sort(([a],[b])=>a.localeCompare(b,'fr')).forEach(([sup,prods])=>{
-    let supTA=0, supTB=0;
-    const lines=prods.map(p=>{
-      const key=productKey(p), d=getProductData(p), pc=getPrixColis(p);
-      const qa=state.quantities_a[key]||0, qb=state.quantities_b[key]||0;
-      const ta=qa*pc, tb=qb*pc;
-      supTA+=ta; supTB+=tb;
-      return {p,d,pc,qa,qb,ta,tb};
-    });
-    grandTotalA+=supTA; grandTotalB+=supTB;
-
-    htmlParts.push(`<div class="summary-supplier">
-      <div class="summary-supplier-name">${escHtml(sup)}</div>
-      <div class="summary-gerant-cols">
-        <div class="summary-gcol summary-gcol--a">${etabA.icon} ${escHtml(etabA.label)}</div>
-        <div class="summary-gcol summary-gcol--b">${etabB.icon} ${escHtml(etabB.label)}</div>
-      </div>
-      ${lines.map(({p,d,qa,qb,ta,tb})=>`
-        <div class="summary-line summary-line--gerant">
-          <span class="summary-line-name">${escHtml(d.label||p.nom_court)}</span>
-          <span class="summary-line-ref">${escHtml(d.reference)}</span>
-          <div class="summary-gcells">
-            <span class="summary-gcell summary-gcell--a">${qa>0?qa+' colis = '+fmtPrice(ta):'—'}</span>
-            <span class="summary-gcell summary-gcell--b">${qb>0?qb+' colis = '+fmtPrice(tb):'—'}</span>
-          </div>
-        </div>`).join('')}
-      <div class="summary-gerant-subtotals">
-        <span>${fmtPrice(supTA)}</span>
-        <span>${fmtPrice(supTB)}</span>
-        <span class="summary-sup-total">= ${fmtPrice(supTA+supTB)}</span>
-      </div>
-    </div>`);
-
-    // Texte A
-    const linesA=lines.filter(l=>l.qa>0);
-    if(linesA.length){
-      textPartsA.push('\n--- '+sup+' ---');
-      linesA.forEach(({p,d,qa,ta})=>textPartsA.push(qa+'x '+(d.label||p.nom_court)+' (ref: '+d.reference+') = '+fmtPrice(ta)));
-      textPartsA.push('Sous-total : '+fmtPrice(supTA));
-    }
-    // Texte B
-    const linesB=lines.filter(l=>l.qb>0);
-    if(linesB.length){
-      textPartsB.push('\n--- '+sup+' ---');
-      linesB.forEach(({p,d,qb,tb})=>textPartsB.push(qb+'x '+(d.label||p.nom_court)+' (ref: '+d.reference+') = '+fmtPrice(tb)));
-      textPartsB.push('Sous-total : '+fmtPrice(supTB));
-    }
-  });
-
-  htmlParts.push(`<div class="summary-grand-total summary-grand-total--gerant">
-    <div><span>${etabA.icon} ${escHtml(etabA.label)}</span><span>${fmtPrice(grandTotalA)}</span></div>
-    <div><span>${etabB.icon} ${escHtml(etabB.label)}</span><span>${fmtPrice(grandTotalB)}</span></div>
-    <div class="sgt-total"><span>Total général</span><span>${fmtPrice(grandTotalA+grandTotalB)}</span></div>
-  </div>`);
-
-  textPartsA.push('\nTOTAL HT : '+fmtPrice(grandTotalA));
-  textPartsB.push('\nTOTAL HT : '+fmtPrice(grandTotalB));
-
-  summaryContent.innerHTML = htmlParts.join('');
-  // Deux boutons copie dans le footer
-  summaryModal.dataset.textA = textPartsA.join('\n');
-  summaryModal.dataset.textB = textPartsB.join('\n');
-  summaryModal.dataset.text  = textPartsA.join('\n') + '\n\n' + textPartsB.join('\n');
-  summaryModal.style.display='flex';
-
-  // Affiche les boutons copie spécifiques gérant
-  $('copyBtn').style.display='none';
-  $('copyBtnA').style.display='flex';
-  $('copyBtnB').style.display='flex';
-}
-function closeSummary() {
-  summaryModal.style.display='none';
-  // Remet les boutons dans l'état normal
-  $('copyBtn').style.display='flex';
-  $('copyBtnA').style.display='none';
-  $('copyBtnB').style.display='none';
-}
-
-// ---- Events -----------------------------------------------
-validateBtn.addEventListener('click',openSummary);
-summaryBtn.addEventListener('click',openSummary);
-$('closeModal').addEventListener('click',closeSummary);
-summaryModal.addEventListener('click',e=>{ if(e.target===summaryModal) closeSummary(); });
-
-$('copyBtn').addEventListener('click',()=>{
-  recordOrder(state.quantities);
-  archiveCommande();
-  navigator.clipboard.writeText(summaryModal.dataset.text||'').then(()=>showToast('✅ Copie et archive'));
-});
-$('copyBtnA').addEventListener('click',()=>{
-  recordOrder(state.quantities_a);
-  navigator.clipboard.writeText(summaryModal.dataset.textA||'').then(()=>showToast('✅ '+CONFIG.ETABS.find(e=>e.id==="a").label+' copié'));
-});
-$('copyBtnB').addEventListener('click',()=>{
-  recordOrder(state.quantities_b);
-  navigator.clipboard.writeText(summaryModal.dataset.textB||'').then(()=>showToast('✅ '+CONFIG.ETABS.find(e=>e.id==="b").label+' copié'));
-});
-
-$('resetBtn').addEventListener('click',()=>{
-  if(!confirm('Vider la commande en cours ?')) return;
-  if(state.etab && state.etab.id==='gerant') {
-    state.quantities_a={}; state.quantities_b={};
-    if(CONFIG.APPS_SCRIPT_URL) {
-      fetch(CONFIG.APPS_SCRIPT_URL+'?action=clear&etab=a',{method:'POST',mode:'no-cors'}).catch(()=>{});
-      fetch(CONFIG.APPS_SCRIPT_URL+'?action=clear&etab=b',{method:'POST',mode:'no-cors'}).catch(()=>{});
-    }
-  } else {
-    state.quantities={}; clearCommandeRemote();
-  }
-  closeSummary(); renderAccordion(); updateTotal();
-});
-
-refreshBtn.addEventListener('click',()=>{
-  // Vide tout et recharge depuis le Sheet
-  state.quantities={}; state.quantities_a={}; state.quantities_b={};
-  state.loaded=false;
-  productList.style.display='none';
-  loadData(); showToast('↻ Rechargement...');
-});
-
-searchInput.addEventListener('input',()=>{ state.search=searchInput.value; renderAccordion(); });
-
-// ---- Fermeture onglet ------------------------------------
-function closeApp() {
-  window.close();
-  setTimeout(() => {
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#aaa;font-size:14px;">Vous pouvez fermer cet onglet.</div>';
-  }, 200);
-}
-const closeAppBtn = $('closeAppBtn');
-if(closeAppBtn) closeAppBtn.addEventListener('click', ()=>closeApp());
-
-// ---- Init -------------------------------------------------
-weekLabel.textContent=getWeekLabel();
-const savedEtab=getSavedEtab();
-if(savedEtab) selectEtab(savedEtab); else renderEtabScreen();
