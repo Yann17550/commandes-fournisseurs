@@ -3,6 +3,13 @@
 // Ce fichier charge les modules et initialise l'application
 // ================================================================
 
+// ================================================================
+// IMPORTS DE TOUS LES MODULES
+// ================================================================
+import { initState, getState, selectEtab, getCurrentEstablishment } from './modules/state.js';
+import { initializeData } from './modules/data-loader.js';
+import { updateAllUI } from './modules/ui.js';
+
 console.log('=== APP.JS LOADING ===');
 
 // ================================================================
@@ -17,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('initState exists?', typeof initState);
         console.log('getState exists?', typeof getState);
         console.log('initializeData exists?', typeof initializeData);
-        console.log('renderEtabSelect exists?', typeof renderEtabSelect);
+        console.log('updateAllUI exists?', typeof updateAllUI);
         
         if (typeof initState !== 'function') {
             alert('ERREUR: Les modules ne sont pas chargés correctement!');
@@ -29,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Step 1: Init state');
             initState();
             
-                // Step 2: Load data from TSV files (establishments, suppliers, sheets)
+            // Step 2: Load data from TSV files (establishments, suppliers, sheets)
             initializeData();
             
             const state = getState();
@@ -75,7 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                     
-                    // Navigate to app screen  
+                    // Navigate to app screen
                     const screenEtab = document.getElementById('screenEtab');
                     const screenApp = document.getElementById('screenApp');
                     
@@ -86,25 +93,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         console.error('Screen elements not found!', {screenEtab, screenApp});
                     }
-
-                                        // Load data for establishment
-                                        if (typeof initializeData === 'function') {
-                                                                    initializeData().then(() => {
-                                                                                                    console.log('Data loaded successfully');
-                                                                                                    // Update UI
-                                                                                                    if (typeof updateAllUI === 'function') {
-                                                                                                                                        updateAllUI();
-                                                                                                                                    }
-                                                                                                }).catch(error => {
-                                                                                                    console.error('Error loading data:', error);
-                                                                                                    alert('Erreur lors du chargement des données');
-                                                                                                });
-                                                                } else {
-                                                                    // Fallback if initializeData not available
-                                                                    if (typeof updateAllUI === 'function') {
-                                                                                                    updateAllUI();
-                                                                                                }
-                                                                }
+                    
+                    // Load data for establishment
+                    if (typeof initializeData === 'function') {
+                        initializeData().then(() => {
+                            console.log('Data loaded successfully');
+                            // Update UI
+                            if (typeof updateAllUI === 'function') {
+                                updateAllUI();
+                            }
+                        }).catch(error => {
+                            console.error('Error loading data:', error);
+                            alert('Erreur lors du chargement des données');
+                        });
+                    } else {
+                        // Fallback if initializeData not available
+                        if (typeof updateAllUI === 'function') {
+                            updateAllUI();
+                        }
+                    }
                     
                     // Update UI
                     if (typeof updateAllUI === 'function') {
@@ -122,5 +129,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('INIT ERROR:', e);
             alert('ERREUR: ' + e.message);
         }
+        
     }, 500);
 });
