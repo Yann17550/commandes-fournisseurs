@@ -130,8 +130,19 @@
     </div>
   </div>
 </div>
-
-      
-    <script type="module" src="app.js"></script>
+    <!-- Configuration -->
+    <script src="config.js"></script>
+    
+    <!-- Modules - Dans l'ordre de dépendance -->
+    <script src="modules/state.js"></script>
+    <script src="modules/data-loader.js"></script>
+    <script src="modules/establishment.js"></script>
+    <script src="modules/suppliers.js"></script>
+    <script src="modules/sheets.js"></script>
+    <script src="modules/ui.js"></script>
+    <script src="modules/commands.js"></script>
+    
+    <!-- Application principale -->
+    <script src="app.js"></script>
 </body>
 </html>
