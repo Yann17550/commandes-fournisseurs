@@ -75,8 +75,8 @@ export async function loadSuppliers() {
 
 /**
  * Initialise les données de l'application
- * Charge les produits et fournisseurs et met à jour le state
- * @returns {Promise<void>}
+ * Charge les produits et fournisseurs et retourne les données
+ * @returns {Promise<Object>} Les données chargées {products, suppliers}
  */
 export async function initializeData() {
     try {
@@ -88,10 +88,6 @@ export async function initializeData() {
             loadSuppliers()
         ]);
         
-        // Mettre à jour le state avec les données chargées
-        updateProducts(products);
-        updateSuppliers(suppliers);
-        
         console.log('Données initialisées avec succès');
         return { products, suppliers };
     } catch (error) {
@@ -101,16 +97,10 @@ export async function initializeData() {
 }
 
 /**
- * Recharge les données de l'établissement courant
- * @returns {Promise<void>}
+ * Recharge les données
+ * @returns {Promise<Object>} Les données rechargées
  */
 export async function reloadEstablishmentData() {
-    const establishment = getCurrentEstablishment();
-    if (!establishment) {
-        console.warn('Aucun établissement sélectionné');
-        return;
-    }
-    
-    console.log('Rechargement des données pour:', establishment);
-    await initializeData();
+    console.log('Rechargement des données...');
+    return await initializeData();
 }
