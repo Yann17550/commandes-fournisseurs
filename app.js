@@ -856,7 +856,7 @@ function renderRowGerant(p, isVariant) {
 
   // Chaque établissement : une ligne stepper + montant inline
   const rowA = `<div class="gr-etab-row gr-etab-row--a">
-    <span class="gr-etab-icon">🍕Pizza d'Oléron</span>
+    <span class="gr-etab-icon">🍕</span>
     <div class="qty-stepper qty-stepper--sm">
       <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="a" data-delta="-1">−</button>
       <input class="qty-input-g" type="number" min="0" step="1" value="${qa}"
@@ -867,7 +867,7 @@ function renderRowGerant(p, isVariant) {
   </div>`;
 
   const rowB = `<div class="gr-etab-row gr-etab-row--b">
-    <span class="gr-etab-icon">🌋Le Vesuvio</span>
+    <span class="gr-etab-icon">🌋</span>
     <div class="qty-stepper qty-stepper--sm">
       <button class="qty-btn-g" data-key="${escHtml(key)}" data-etab="b" data-delta="-1">−</button>
       <input class="qty-input-g" type="number" min="0" step="1" value="${qb}"
