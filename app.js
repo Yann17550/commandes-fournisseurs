@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Checking modules...');
         console.log('initState exists?', typeof initState);
         console.log('getState exists?', typeof getState);
-        console.log('loadAllEstablishments exists?', typeof loadAllEstablishments);
+        console.log('initializeData exists?', typeof initializeData);
         console.log('renderEtabSelect exists?', typeof renderEtabSelect);
         
         if (typeof initState !== 'function') {
@@ -29,9 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Step 1: Init state');
             initState();
             
-            // Step 2: Load establishments from localStorage
-            console.log('Step 2: Load establishments');
-            loadAllEstablishments();
+                // Step 2: Load data from TSV files (establishments, suppliers, sheets)
+            initializeData();
             
             const state = getState();
             console.log('State after load:', state);
@@ -87,6 +86,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         console.error('Screen elements not found!', {screenEtab, screenApp});
                     }
+
+                                        // Load data for establishment
+                                        if (typeof initializeData === 'function') {
+                                                                    initializeData().then(() => {
+                                                                                                    console.log('Data loaded successfully');
+                                                                                                    // Update UI
+                                                                                                    if (typeof updateAllUI === 'function') {
+                                                                                                                                        updateAllUI();
+                                                                                                                                    }
+                                                                                                }).catch(error => {
+                                                                                                    console.error('Error loading data:', error);
+                                                                                                    alert('Erreur lors du chargement des données');
+                                                                                                });
+                                                                } else {
+                                                                    // Fallback if initializeData not available
+                                                                    if (typeof updateAllUI === 'function') {
+                                                                                                    updateAllUI();
+                                                                                                }
+                                                                }
                     
                     // Update UI
                     if (typeof updateAllUI === 'function') {
