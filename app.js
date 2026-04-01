@@ -1,11 +1,3 @@
-// BACKUP DE L'ANCIEN app.js (v3) AVANT REFACTORISATION MODULARISEE
-// Ce fichier est conserve en cas de probleme avec la nouvelle version modulaire
-// Pour revenir a cette version, renommez app.js en app.js.new
-// et app.js.backup en app.js, puis actualisez la page
-
-// LE CONTENU COMPLET DE L'ANCIEN app.js DEVRAIT ETRE COPIE ICI
-
-
 // ============================================================
 //  APP.JS — Commandes Fournisseurs v3
 //  Multi-etablissement, colissage, historique, edition inline
